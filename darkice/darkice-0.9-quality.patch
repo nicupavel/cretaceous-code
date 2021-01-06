@@ -1,0 +1,279 @@
+diff -urN darkice-0.9-pristine/man/darkice.cfg.5 darkice-0.9/man/darkice.cfg.5
+--- darkice-0.9-pristine/man/darkice.cfg.5	Thu Feb 28 11:49:25 2002
++++ darkice-0.9/man/darkice.cfg.5	Fri Mar 22 23:13:59 2002
+@@ -149,7 +149,13 @@
+ Highpass filter setting for the lame encoder. If not set or set to 0,
+ the encoder's default behaviour is used. If set to -1, the filter is
+ disabled.
+-
++.TP
++.I quality
++Noise shaping and psycho acoustic quality from 0 to 9. 
++0 means high quality but very slow and a lot of cpu used.
++9 means poor quality but very little cpu used.
++If not set encoder is set with a quality of 2.
++						    
+ .PP
+ .B [icecast2-x]
+ 
+@@ -282,6 +288,12 @@
+ the encoder's default behaviour is used. If set to -1, the filter is
+ disabled.
+ .TP
++.I quality
++Noise shaping and psycho acoustic quality from 0 to 9. 
++0 means high quality but very slow and a lot of cpu used.
++9 means poor quality but very little cpu used.
++If not set encoder is set with a quality of 2.
++.TP
+ .I localDumpFile
+ Dump the same mp3 data sent to the
+ .B ShoutCast
+@@ -327,6 +339,12 @@
+ the encoder's default behaviour is used. If set to -1, the filter is
+ disabled.
+ Only used if the output format is mp3.
++.TP
++.I quality
++Noise shaping and psycho acoustic quality from 0 to 9. 
++0 means high quality but very slow and a lot of cpu used.
++9 means poor quality but very little cpu used.
++If not set encoder is set with a quality of 2.
+ 
+ .PP
+ A sample configuration file follows. This file makes
+diff -urN darkice-0.9-pristine/src/DarkIce.cpp darkice-0.9/src/DarkIce.cpp
+--- darkice-0.9-pristine/src/DarkIce.cpp	Fri Mar 22 22:12:47 2002
++++ darkice-0.9/src/DarkIce.cpp	Fri Mar 22 23:25:21 2002
+@@ -214,6 +214,7 @@
+         bool            isPublic        = false;
+         int             lowpass         = 0;
+         int             highpass        = 0;
++        unsigned int    quality         = 0;
+         const char    * localDumpName   = 0;
+         FileSink      * localDumpFile   = 0;
+ 
+@@ -238,7 +239,9 @@
+         str         = cs->get( "lowpass");
+         lowpass     = str ? Util::strToL( str) : 0;
+         str         = cs->get( "highpass");
+-        highpass    = str ? Util::strToL( str) : 0;
++	highpass    = str ? Util::strToL( str) : 0;
++        str         = cs->get("quality");
++        quality     = str ? Util::strToL( str) : 2;
+         localDumpName = cs->get( "localDumpFile");
+ 
+         // go on and create the things
+@@ -282,7 +285,8 @@
+                                                    sampleRate,
+                                                    dsp->getChannel(),
+                                                    lowpass,
+-                                                   highpass );
++                                                   highpass,
++						   quality );
+ 
+         encConnector->attach( audioOuts[u].encoder.get());
+ #endif // HAVE_LAME_LIB
+@@ -451,7 +455,7 @@
+                                 unsigned int        bufferSecs  )
+                                                         throw ( Exception )
+ {
+-    // look for IceCast encoder output streams,
++    // look for Shoutcast encoder output streams,
+     // sections [shoutcast-0], [shoutcast-1], ...
+     char            stream[]        = "shoutcast- ";
+     size_t          streamLen       = Util::strLen( stream);
+@@ -487,6 +491,7 @@
+         bool            isPublic        = false;
+         int             lowpass         = 0;
+         int             highpass        = 0;
++        unsigned int    quality         = 0;
+         const char    * irc             = 0;
+         const char    * aim             = 0;
+         const char    * icq             = 0;
+@@ -510,6 +515,8 @@
+         lowpass     = str ? Util::strToL( str) : 0;
+         str         = cs->get( "highpass");
+         highpass    = str ? Util::strToL( str) : 0;
++        str         = cs->get("quality");
++        quality     = str ? Util::strToL( str) : 2;
+         irc         = cs->get( "irc");
+         aim         = cs->get( "aim");
+         icq         = cs->get( "icq");
+@@ -556,7 +563,8 @@
+                                                    sampleRate,
+                                                    dsp->getChannel(),
+                                                    lowpass,
+-                                                   highpass );
++                                                   highpass,
++				                   quality );
+ 
+         encConnector->attach( audioOuts[u].encoder.get());
+ #endif // HAVE_LAME_LIB
+@@ -597,6 +605,7 @@
+         unsigned int        sampleRate      = 0;
+         int                 lowpass         = 0;
+         int                 highpass        = 0;
++        unsigned int        quality         = 0;
+ 
+         format      = cs->getForSure( "format", " missing in section ", stream);
+         if ( !Util::strEq( format, "vorbis") && !Util::strEq( format, "mp3") ) {
+@@ -615,6 +624,8 @@
+         lowpass     = str ? Util::strToL( str) : 0;
+         str         = cs->get( "highpass");
+         highpass    = str ? Util::strToL( str) : 0;
++        str         = cs->get("quality");
++        quality     = str ? Util::strToL( str) : 2;
+ 
+         // go on and create the things
+ 
+@@ -645,7 +656,8 @@
+                                                     sampleRate,
+                                                     dsp->getChannel(),
+                                                     lowpass,
+-                                                    highpass );
++                                                    highpass,
++				                    quality );
+ #endif // HAVE_LAME_LIB
+         } else if ( Util::strEq( format, "vorbis") ) {
+ #ifndef HAVE_VORBIS_LIB
+diff -urN darkice-0.9-pristine/src/LameLibEncoder.cpp darkice-0.9/src/LameLibEncoder.cpp
+--- darkice-0.9-pristine/src/LameLibEncoder.cpp	Wed Mar 20 12:29:25 2002
++++ darkice-0.9/src/LameLibEncoder.cpp	Fri Mar 22 23:26:45 2002
+@@ -145,16 +145,17 @@
+                  "set lame highpass frequency",
+                  lame_get_highpassfreq( lameGlobalFlags));
+     
+-    // not configurable lame settings
+ 
+-    if ( 0 > lame_set_quality( lameGlobalFlags, 2) ) {
++    if ( 0 > lame_set_quality( lameGlobalFlags, quality) ) {
+         throw Exception( __FILE__, __LINE__,
+                          "lame lib setting quality error",
+-                         2 );
++                         quality );
+     }
+ 
+     reportEvent( 5, "set lame quality", lame_get_quality( lameGlobalFlags));
+     
++    // not configurable lame settings
++    
+     if ( 0 > lame_set_exp_nspsytune( lameGlobalFlags, 1) ) {
+         throw Exception( __FILE__, __LINE__,
+                          "lame lib setting  psycho acoustic model error");
+diff -urN darkice-0.9-pristine/src/LameLibEncoder.h darkice-0.9/src/LameLibEncoder.h
+--- darkice-0.9-pristine/src/LameLibEncoder.h	Sat Oct 20 13:56:45 2001
++++ darkice-0.9/src/LameLibEncoder.h	Fri Mar 22 23:28:34 2002
+@@ -94,6 +94,13 @@
+          *  input is cut.
+          */
+         int                             highpass;
++	
++	/**
++         *  Noise shaping & psycho acoustic quality algorithm
++         *  0 - high quality slow ... 9 - poor quality fast
++         */
++	
++	unsigned int			quality;
+ 
+         /**
+          *  Initialize the object.
+@@ -107,16 +114,21 @@
+          *                  Input below this frequency is cut.
+          *                  If 0, lame's default values are used,
+          *                  which depends on the out sample rate.
++         *  @param quality  Noise shaping & psycho acoustic quality 
++         *                  algorithm.
++         *                  0 - high quality slow ... 9 - poor quality fast
+          *  @exception Exception
+          */
+         inline void
+         init ( Sink           * sink,
+                int              lowpass,
+-               int              highpass )                  throw ( Exception )
++               int              highpass,
++	       unsigned int	quality )                  throw ( Exception )
+         {
+             this->sink     = sink;
+             this->lowpass  = lowpass;
+             this->highpass = highpass;
++	    this->quality  = quality;
+ 
+             if ( getInBitsPerSample() != 16 && getInBitsPerSample() != 8 ) {
+                 throw Exception( __FILE__, __LINE__,
+@@ -213,6 +225,9 @@
+          *                  Input below this frequency is cut.
+          *                  If 0, lame's default values are used,
+          *                  which depends on the out sample rate.
++         *  @param quality  Noise shaping & psycho acoustic quality 
++         *                  algorithm.
++         *                  0 - high quality slow ... 9 - poor quality fast
+          *  @exception Exception
+          */
+         inline
+@@ -224,7 +239,8 @@
+                             unsigned int    outSampleRate = 0,
+                             unsigned int    outChannel    = 0,
+                             int             lowpass       = 0,
+-                            int             highpass      = 0 )
++                            int             highpass      = 0,
++			    unsigned int    quality	  = 0 )
+                                                         throw ( Exception )
+             
+                     : AudioEncoder ( inSampleRate,
+@@ -234,7 +250,7 @@
+                                      outSampleRate,
+                                      outChannel )
+         {
+-            init( sink, lowpass, highpass );
++            init( sink, lowpass, highpass, quality );
+         }
+ 
+         /**
+@@ -256,6 +272,9 @@
+          *                  Input below this frequency is cut.
+          *                  If 0, lame's default values are used,
+          *                  which depends on the out sample rate.
++         *  @param quality  Noise shaping & psycho acoustic quality 
++         *                  algorithm.
++         *                  0 - high quality slow ... 9 - poor quality fast
+          *  @exception Exception
+          */
+         inline
+@@ -265,7 +284,8 @@
+                             unsigned int            outSampleRate = 0,
+                             unsigned int            outChannel    = 0,
+                             int                     lowpass       = 0,
+-                            int                     highpass      = 0 )
++                            int                     highpass      = 0,
++			    unsigned int	    quality	  = 0 )
+                                                             throw ( Exception )
+             
+                     : AudioEncoder ( as,
+@@ -273,7 +293,7 @@
+                                      outSampleRate,
+                                      outChannel )
+         {
+-            init( sink, lowpass, highpass );
++            init( sink, lowpass, highpass, quality );
+         }
+ 
+         /**
+@@ -286,7 +306,7 @@
+                                                             throw ( Exception )
+                     : AudioEncoder( encoder )
+         {
+-            init( encoder.sink.get(), encoder.lowpass, encoder.highpass );
++            init( encoder.sink.get(), encoder.lowpass, encoder.highpass, encoder.quality );
+         }
+ 
+         /**
+@@ -316,7 +336,7 @@
+             if ( this != &encoder ) {
+                 strip();
+                 AudioEncoder::operator=( encoder);
+-                init( encoder.sink.get(), encoder.lowpass, encoder.highpass );
++                init( encoder.sink.get(), encoder.lowpass, encoder.highpass, encoder.quality );
+             }
+ 
+             return *this;

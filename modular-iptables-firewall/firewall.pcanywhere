@@ -1,0 +1,18 @@
+function pcanywhere_allow ()
+{
+
+	for i in $ALLOW_PCANYWHERE; do
+	
+		iptables -A FORWARD -p tcp --sport $UNPRIVPORTS -d $i \
+			 --dport 5631 -m state --state NEW -j ACCEPT
+		iptables -A FORWARD -p udp --sport $UNPRIVPORTS -d $i \
+			--dport 5632 -j ACCEPT
+	done
+		
+	echo "pcanywhere"
+}
+
+function MODULE_EXPORT ()
+{
+	pcanywhere_allow
+}

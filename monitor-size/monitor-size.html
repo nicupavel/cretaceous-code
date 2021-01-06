@@ -1,0 +1,61 @@
+<html>
+<head><title>Monitor sizes checker</title>
+<script language="javascript">
+var output = " ";
+function gH(d, r)
+{
+    n = d/Math.sqrt(Math.pow(r,2) + 1);
+    return n.toFixed(2);
+
+}
+
+function gL(d,r)
+{
+    n = d/Math.sqrt(1/Math.pow(r,2) + 1);
+    return n.toFixed(2);
+}
+
+function gA(d,r)
+{
+    n = Math.pow(d,2)/(r + 1/r);
+    return n.toFixed(2);
+}
+
+function display(d,u)
+{
+    d = d * u;
+    
+    if (u > 1)
+    {
+	output = output + "<br>--diagonal: " + d + "----centimeters---------------";
+    }
+    else
+    {
+	output = output + "<br>--diagonal: " + d + "----inches--------------------";
+    }
+    
+
+    
+    
+    output =output + "<br><b>16:9</b>&nbsp;&nbsp;&nbsp;H:" + gH(d, 16/9) + " W: " + gL(d, 16/9) + " A: " + gA(d, 16/9) + 
+    " <b>16:10</b>&nbsp;H:" + gH(d, 16/10) + " W: " + gL(d, 16/10) + " A: " + gA(d, 16/10) + 
+    " <b>4:3</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H:" + gH(d, 4/3) + " W: " + gL(d, 4/3) + " A: " + gA(d, 4/3);
+    
+    document.getElementById("output").innerHTML = output;
+
+    
+}
+</script>
+</head>
+<body>
+Input monitor diagonal in inches: <input type="text" id="diagonal" value="22" size=50>
+<br/>
+<input type="button" value="Display in inches" onClick='display(document.getElementById("diagonal").value, 1)'>
+<input type="button" value="Display in centimeters" onClick='display(document.getElementById("diagonal").value, 2.54)'>
+<div id="output">
+<br>
+
+</div>
+
+</body>
+</html>

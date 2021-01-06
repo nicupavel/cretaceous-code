@@ -1,0 +1,16 @@
+function allow_10000 ()
+{
+
+	for i in $ALLOW_10000; do
+	
+		iptables -A FORWARD -p tcp --sport $UNPRIVPORTS -d $i \
+			 --dport 10000 -m state --state NEW -j ACCEPT
+	done
+		
+	echo "port 10000"
+}
+
+function MODULE_EXPORT ()
+{
+	allow_10000
+}

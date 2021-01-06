@@ -1,0 +1,53 @@
+function ituner_allow ()
+{
+	
+	# ituner real spliters
+
+	iptables -A FORWARD -p tcp -s 66.28.252.97 --sport $UNPRIVPORTS -d 217.163.8.206 \
+			 --dport 8080 -m state --state NEW -j ACCEPT
+	
+	iptables -A FORWARD -p tcp -s 66.28.252.97 --sport $UNPRIVPORTS -d 217.163.8.205 \
+                         --dport 873 -m state --state NEW -j ACCEPT
+	
+	iptables -A FORWARD -p tcp -s 66.28.252.70 --sport $UNPRIVPORTS -d 217.163.8.205 \
+                         --dport 873 -m state --state NEW -j ACCEPT
+
+	iptables -A FORWARD -p tcp -s 66.28.252.96 --sport $UNPRIVPORTS -d 217.163.8.203 \
+                         --dport 8080 -m state --state NEW -j ACCEPT
+
+	# winwin.ituner.com split stream from windowsmedia1
+
+	iptables -A FORWARD -p tcp -s 66.28.252.69 --sport 20 -d 217.163.8.200 \
+			-m state --state NEW -j ACCEPT
+
+	iptables -A FORWARD -p icmp -s 66.28.252.97 -j ACCEPT
+	iptables -A FORWARD -p icmp -s 66.28.252.79 -j ACCEPT
+		
+	echo "ituner rules"
+}
+
+function allow_ms_streaming ()
+{
+	iptables -A FORWARD -p tcp --sport $UNPRIVPORTS -d 217.163.8.200 \
+			 --dport 1215 -m state --state NEW -j ACCEPT
+	
+	iptables -A FORWARD -p tcp --sport $UNPRIVPORTS -d 217.163.8.200 \
+			 --dport 1755 -m state --state NEW -j ACCEPT
+
+	echo "ms streaming"
+}
+
+function allow_swat ()
+{
+	iptables -A FORWARD -p tcp --sport $UNPRIVPORTS -d 217.163.8.205 \
+			--dport 901 -m state --state NEW -j ACCEPT
+
+	echo "swat for 217.163.8.205"
+}
+
+function MODULE_EXPORT ()
+{
+	ituner_allow
+	allow_ms_streaming
+	allow_swat
+}

@@ -1,0 +1,38 @@
+#! /bin/bash
+#
+CWD=`dirname $0`
+
+if [ ! -f $CWD/firewall.conf ]
+then
+	echo "Can't open firewall.conf in $CWD exiting."
+	exit 1
+fi
+
+. $CWD/firewall.conf
+
+
+case "$1" in
+  start)
+	for i in $FIREWALL_MODULES; do
+		if [ -f $CWD/$i ]; then
+			. $CWD/$i
+			 echo "$i exports:"
+			 MODULE_EXPORT
+		fi
+	done
+	
+        ;;
+  stop)
+        ;;
+  status)
+	;;
+  restart|reload)
+	$0 stop
+	$0 start
+	;;
+  *)
+        echo $"Usage: $0 {start|stop|restart|reload|status}"
+        exit 1
+esac
+
+exit 0

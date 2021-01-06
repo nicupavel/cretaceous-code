@@ -1,0 +1,3293 @@
+From ea2dad5bba9f6313f63b10affc9ea0b3cf3cdeba Mon Sep 17 00:00:00 2001
+From: Nicu Pavel <npavel@mini-box.com>
+Date: Mon, 20 Jun 2011 14:08:41 +0300
+Subject: [PATCH] [picopc] Added ethernet patch based on Yi Sun <beyounn@gmail.com> from android-x86.org
+ Changes from android-x86.org:
+  - ported to gingerbread
+  - fixed issue with static IP not being setup correctly
+  - changed statusbarpolicy.java
+  - added new ethernet icons from Iulian Luca <iulian@mini-box.com>
+
+Change-Id: I92b2a9f9e464662e207fa88f8d581bb3909e6908
+---
+ Android.mk                                         |    1 +
+ api/current.xml                                    | 1086 ++++++++++++++++++++
+ core/java/android/app/ContextImpl.java             |   21 +
+ core/java/android/content/Context.java             |   10 +
+ core/java/android/provider/Settings.java           |   13 +
+ core/jni/Android.mk                                |    1 +
+ core/jni/AndroidRuntime.cpp                        |    2 +
+ core/jni/android_net_ethernet.cpp                  |  419 ++++++++
+ core/res/res/values/config.xml                     |    2 +
+ .../java/android/net/ethernet/EthernetDevInfo.aidl |   19 +
+ .../java/android/net/ethernet/EthernetDevInfo.java |  152 +++
+ .../java/android/net/ethernet/EthernetManager.java |  158 +++
+ .../java/android/net/ethernet/EthernetMonitor.java |  134 +++
+ .../java/android/net/ethernet/EthernetNative.java  |   30 +
+ .../android/net/ethernet/EthernetStateTracker.java |  416 ++++++++
+ .../android/net/ethernet/IEthernetManager.aidl     |   30 +
+ .../res/drawable-hdpi/connect_creating.png         |  Bin 0 -> 429 bytes
+ .../res/drawable-hdpi/connect_established.png      |  Bin 0 -> 564 bytes
+ packages/SystemUI/res/drawable-hdpi/connect_no.png |  Bin 0 -> 438 bytes
+ .../res/drawable-mdpi/connect_creating.png         |  Bin 0 -> 476 bytes
+ .../res/drawable-mdpi/connect_established.png      |  Bin 0 -> 562 bytes
+ packages/SystemUI/res/drawable-mdpi/connect_no.png |  Bin 0 -> 373 bytes
+ .../systemui/statusbar/StatusBarPolicy.java        |   54 +
+ .../com/android/server/ConnectivityService.java    |   31 +-
+ .../java/com/android/server/EthernetService.java   |  212 ++++
+ 25 files changed, 2787 insertions(+), 4 deletions(-)
+ create mode 100644 core/jni/android_net_ethernet.cpp
+ create mode 100644 ethernet/java/android/net/ethernet/EthernetDevInfo.aidl
+ create mode 100644 ethernet/java/android/net/ethernet/EthernetDevInfo.java
+ create mode 100644 ethernet/java/android/net/ethernet/EthernetManager.java
+ create mode 100644 ethernet/java/android/net/ethernet/EthernetMonitor.java
+ create mode 100644 ethernet/java/android/net/ethernet/EthernetNative.java
+ create mode 100644 ethernet/java/android/net/ethernet/EthernetStateTracker.java
+ create mode 100644 ethernet/java/android/net/ethernet/IEthernetManager.aidl
+ create mode 100755 packages/SystemUI/res/drawable-hdpi/connect_creating.png
+ create mode 100755 packages/SystemUI/res/drawable-hdpi/connect_established.png
+ create mode 100755 packages/SystemUI/res/drawable-hdpi/connect_no.png
+ create mode 100755 packages/SystemUI/res/drawable-mdpi/connect_creating.png
+ create mode 100755 packages/SystemUI/res/drawable-mdpi/connect_established.png
+ create mode 100755 packages/SystemUI/res/drawable-mdpi/connect_no.png
+ create mode 100644 services/java/com/android/server/EthernetService.java
+
+diff --git a/Android.mk b/Android.mk
+index e727130..4bee33d 100644
+--- a/Android.mk
++++ b/Android.mk
+@@ -187,6 +187,7 @@ LOCAL_SRC_FILES += \
+ 	telephony/java/com/android/internal/telephony/ISms.aidl \
+ 	telephony/java/com/android/internal/telephony/IWapPushManager.aidl \
+ 	wifi/java/android/net/wifi/IWifiManager.aidl \
++	ethernet/java/android/net/ethernet/IEthernetManager.aidl \
+ 	telephony/java/com/android/internal/telephony/IExtendedNetworkService.aidl \
+ 	vpn/java/android/net/vpn/IVpnService.aidl \
+ 	voip/java/android/net/sip/ISipSession.aidl \
+diff --git a/api/current.xml b/api/current.xml
+index f524509..ca07c83 100644
+--- a/api/current.xml
++++ b/api/current.xml
+@@ -35629,6 +35629,17 @@
+  visibility="public"
+ >
+ </field>
++<field name="ETHERNET_SERVICE"
++ type="java.lang.String"
++ transient="false"
++ volatile="false"
++ value="&quot;ethernet&quot;"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
+ <field name="INPUT_METHOD_SERVICE"
+  type="java.lang.String"
+  transient="false"
+@@ -98254,6 +98265,539 @@
+ </method>
+ </interface>
+ </package>
++<package name="android.net.ethernet"
++>
++<class name="EthernetDevInfo"
++ extends="java.lang.Object"
++ abstract="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<implements name="android.os.Parcelable">
++</implements>
++<constructor name="EthernetDevInfo"
++ type="android.net.ethernet.EthernetDevInfo"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</constructor>
++<method name="describeContents"
++ return="int"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</method>
++<method name="getConnectMode"
++ return="java.lang.String"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</method>
++<method name="getDnsAddr"
++ return="java.lang.String"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</method>
++<method name="getIfName"
++ return="java.lang.String"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</method>
++<method name="getIpAddress"
++ return="java.lang.String"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</method>
++<method name="getNetMask"
++ return="java.lang.String"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</method>
++<method name="getRouteAddr"
++ return="java.lang.String"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</method>
++<method name="setConnectMode"
++ return="boolean"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="mode" type="java.lang.String">
++</parameter>
++</method>
++<method name="setDnsAddr"
++ return="void"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="dns" type="java.lang.String">
++</parameter>
++</method>
++<method name="setIfName"
++ return="void"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="ifname" type="java.lang.String">
++</parameter>
++</method>
++<method name="setIpAddress"
++ return="void"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="ip" type="java.lang.String">
++</parameter>
++</method>
++<method name="setNetMask"
++ return="void"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="ip" type="java.lang.String">
++</parameter>
++</method>
++<method name="setRouteAddr"
++ return="void"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="route" type="java.lang.String">
++</parameter>
++</method>
++<method name="writeToParcel"
++ return="void"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="dest" type="android.os.Parcel">
++</parameter>
++<parameter name="flags" type="int">
++</parameter>
++</method>
++<field name="ETHERNET_CONN_MODE_DHCP"
++ type="java.lang.String"
++ transient="false"
++ volatile="false"
++ value="&quot;dhcp&quot;"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++<field name="ETHERNET_CONN_MODE_MANUAL"
++ type="java.lang.String"
++ transient="false"
++ volatile="false"
++ value="&quot;manual&quot;"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++</class>
++<class name="EthernetManager"
++ extends="java.lang.Object"
++ abstract="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<constructor name="EthernetManager"
++ type="android.net.ethernet.EthernetManager"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="service" type="android.net.ethernet.IEthernetManager">
++</parameter>
++<parameter name="handler" type="android.os.Handler">
++</parameter>
++</constructor>
++<method name="getDeviceNameList"
++ return="java.lang.String[]"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</method>
++<method name="getSavedConfig"
++ return="android.net.ethernet.EthernetDevInfo"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</method>
++<method name="getState"
++ return="int"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</method>
++<method name="getTotalInterface"
++ return="int"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</method>
++<method name="isConfigured"
++ return="boolean"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</method>
++<method name="updateDevInfo"
++ return="void"
++ abstract="false"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="info" type="android.net.ethernet.EthernetDevInfo">
++</parameter>
++</method>
++<field name="ETHERNET_DEVICE_SCAN_RESULT_READY"
++ type="int"
++ transient="false"
++ volatile="false"
++ value="0"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++<field name="ETHERNET_STATE_CHANGED_ACTION"
++ type="java.lang.String"
++ transient="false"
++ volatile="false"
++ value="&quot;android.net.ethernet.ETHERNET_STATE_CHANGED&quot;"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++<field name="ETHERNET_STATE_DISABLED"
++ type="int"
++ transient="false"
++ volatile="false"
++ value="1"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++<field name="ETHERNET_STATE_ENABLED"
++ type="int"
++ transient="false"
++ volatile="false"
++ value="2"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++<field name="ETHERNET_STATE_UNKNOWN"
++ type="int"
++ transient="false"
++ volatile="false"
++ value="0"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++<field name="EXTRA_ETHERNET_STATE"
++ type="java.lang.String"
++ transient="false"
++ volatile="false"
++ value="&quot;ETHERNET_state&quot;"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++<field name="EXTRA_NETWORK_INFO"
++ type="java.lang.String"
++ transient="false"
++ volatile="false"
++ value="&quot;networkInfo&quot;"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++<field name="EXTRA_PREVIOUS_ETHERNET_STATE"
++ type="java.lang.String"
++ transient="false"
++ volatile="false"
++ value="&quot;previous_ETHERNET_state&quot;"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++<field name="NETWORK_STATE_CHANGED_ACTION"
++ type="java.lang.String"
++ transient="false"
++ volatile="false"
++ value="&quot;android.net.ethernet.STATE_CHANGE&quot;"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++<field name="TAG"
++ type="java.lang.String"
++ transient="false"
++ volatile="false"
++ value="&quot;EthernetManager&quot;"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++</class>
++<interface name="IEthernetManager"
++ abstract="true"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<implements name="android.os.IInterface">
++</implements>
++<method name="getDeviceNameList"
++ return="java.lang.String[]"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="getSavedConfig"
++ return="android.net.ethernet.EthernetDevInfo"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="getState"
++ return="int"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="getTotalInterface"
++ return="int"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="isConfigured"
++ return="boolean"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="setMode"
++ return="void"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="arg0" type="java.lang.String">
++</parameter>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="setState"
++ return="void"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="arg0" type="int">
++</parameter>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="updateDevInfo"
++ return="void"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="arg0" type="android.net.ethernet.EthernetDevInfo">
++</parameter>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++</interface>
++</package>
+ <package name="android.net.http"
+ >
+ <class name="AndroidHttpClient"
+@@ -100826,6 +101370,448 @@
+ </package>
+ <package name="android.net.wifi"
+ >
++<interface name="IWifiManager"
++ abstract="true"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<implements name="android.os.IInterface">
++</implements>
++<method name="acquireMulticastLock"
++ return="void"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="arg0" type="android.os.IBinder">
++</parameter>
++<parameter name="arg1" type="java.lang.String">
++</parameter>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="acquireWifiLock"
++ return="boolean"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="arg0" type="android.os.IBinder">
++</parameter>
++<parameter name="arg1" type="int">
++</parameter>
++<parameter name="arg2" type="java.lang.String">
++</parameter>
++<parameter name="arg3" type="android.os.WorkSource">
++</parameter>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="addOrUpdateNetwork"
++ return="int"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="arg0" type="android.net.wifi.WifiConfiguration">
++</parameter>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="disableNetwork"
++ return="boolean"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="arg0" type="int">
++</parameter>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="disconnect"
++ return="boolean"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="enableNetwork"
++ return="boolean"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="arg0" type="int">
++</parameter>
++<parameter name="arg1" type="boolean">
++</parameter>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="getConfiguredNetworks"
++ return="java.util.List&lt;android.net.wifi.WifiConfiguration&gt;"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="getConnectionInfo"
++ return="android.net.wifi.WifiInfo"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="getDhcpInfo"
++ return="android.net.DhcpInfo"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="getNumAllowedChannels"
++ return="int"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="getScanResults"
++ return="java.util.List&lt;android.net.wifi.ScanResult&gt;"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="getValidChannelCounts"
++ return="int[]"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="getWifiApConfiguration"
++ return="android.net.wifi.WifiConfiguration"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="getWifiApEnabledState"
++ return="int"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="getWifiEnabledState"
++ return="int"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="initializeMulticastFiltering"
++ return="void"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="isMulticastEnabled"
++ return="boolean"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="pingSupplicant"
++ return="boolean"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="reassociate"
++ return="boolean"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="reconnect"
++ return="boolean"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="releaseMulticastLock"
++ return="void"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="releaseWifiLock"
++ return="boolean"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="arg0" type="android.os.IBinder">
++</parameter>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="removeNetwork"
++ return="boolean"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="arg0" type="int">
++</parameter>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="saveConfiguration"
++ return="boolean"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="setNumAllowedChannels"
++ return="boolean"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="arg0" type="int">
++</parameter>
++<parameter name="arg1" type="boolean">
++</parameter>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="setWifiApConfiguration"
++ return="void"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="arg0" type="android.net.wifi.WifiConfiguration">
++</parameter>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="setWifiApEnabled"
++ return="boolean"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="arg0" type="android.net.wifi.WifiConfiguration">
++</parameter>
++<parameter name="arg1" type="boolean">
++</parameter>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="setWifiEnabled"
++ return="boolean"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="arg0" type="boolean">
++</parameter>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="startScan"
++ return="void"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="arg0" type="boolean">
++</parameter>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++<method name="updateWifiLockWorkSource"
++ return="void"
++ abstract="true"
++ native="false"
++ synchronized="false"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="arg0" type="android.os.IBinder">
++</parameter>
++<parameter name="arg1" type="android.os.WorkSource">
++</parameter>
++<exception name="RemoteException" type="android.os.RemoteException">
++</exception>
++</method>
++</interface>
+ <class name="ScanResult"
+  extends="java.lang.Object"
+  abstract="false"
+@@ -101725,6 +102711,18 @@
+  deprecated="not deprecated"
+  visibility="public"
+ >
++<constructor name="WifiManager"
++ type="android.net.wifi.WifiManager"
++ static="false"
++ final="false"
++ deprecated="not deprecated"
++ visibility="public"
++>
++<parameter name="service" type="android.net.wifi.IWifiManager">
++</parameter>
++<parameter name="handler" type="android.os.Handler">
++</parameter>
++</constructor>
+ <method name="addNetwork"
+  return="int"
+  abstract="false"
+@@ -147569,6 +148567,94 @@
+  visibility="public"
+ >
+ </field>
++<field name="ETHERNET_CONF"
++ type="java.lang.String"
++ transient="false"
++ volatile="false"
++ value="&quot;ethernet_conf&quot;"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++<field name="ETHERNET_DNS"
++ type="java.lang.String"
++ transient="false"
++ volatile="false"
++ value="&quot;ethernet_dns&quot;"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++<field name="ETHERNET_IFNAME"
++ type="java.lang.String"
++ transient="false"
++ volatile="false"
++ value="&quot;ethernet_ifname&quot;"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++<field name="ETHERNET_IP"
++ type="java.lang.String"
++ transient="false"
++ volatile="false"
++ value="&quot;ethernet_ip&quot;"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++<field name="ETHERNET_MASK"
++ type="java.lang.String"
++ transient="false"
++ volatile="false"
++ value="&quot;ethernet_netmask&quot;"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++<field name="ETHERNET_MODE"
++ type="java.lang.String"
++ transient="false"
++ volatile="false"
++ value="&quot;ethernet_mode&quot;"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++<field name="ETHERNET_ON"
++ type="java.lang.String"
++ transient="false"
++ volatile="false"
++ value="&quot;ethernet_on&quot;"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
++<field name="ETHERNET_ROUTE"
++ type="java.lang.String"
++ transient="false"
++ volatile="false"
++ value="&quot;ethernet_iproute&quot;"
++ static="true"
++ final="true"
++ deprecated="not deprecated"
++ visibility="public"
++>
++</field>
+ <field name="HTTP_PROXY"
+  type="java.lang.String"
+  transient="false"
+diff --git a/core/java/android/app/ContextImpl.java b/core/java/android/app/ContextImpl.java
+index 0e473c9..a8d5052 100644
+--- a/core/java/android/app/ContextImpl.java
++++ b/core/java/android/app/ContextImpl.java
+@@ -73,6 +73,8 @@ import android.net.IThrottleManager;
+ import android.net.Uri;
+ import android.net.wifi.IWifiManager;
+ import android.net.wifi.WifiManager;
++import android.net.ethernet.IEthernetManager;
++import android.net.ethernet.EthernetManager;
+ import android.nfc.NfcManager;
+ import android.os.Binder;
+ import android.os.Bundle;
+@@ -169,6 +171,7 @@ class ContextImpl extends Context {
+     private static ConnectivityManager sConnectivityManager;
+     private static ThrottleManager sThrottleManager;
+     private static WifiManager sWifiManager;
++    private static EthernetManager sEthernetManager;
+     private static LocationManager sLocationManager;
+     private static final HashMap<String, SharedPreferencesImpl> sSharedPrefs =
+             new HashMap<String, SharedPreferencesImpl>();
+@@ -940,6 +943,8 @@ class ContextImpl extends Context {
+             return getThrottleManager();
+         } else if (WIFI_SERVICE.equals(name)) {
+             return getWifiManager();
++        } else if (ETHERNET_SERVICE.equals(name)) {
++            return getEthernetManager();
+         } else if (NOTIFICATION_SERVICE.equals(name)) {
+             return getNotificationManager();
+         } else if (KEYGUARD_SERVICE.equals(name)) {
+@@ -1067,6 +1072,22 @@ class ContextImpl extends Context {
+         return sWifiManager;
+     }
+ 
++    private EthernetManager getEthernetManager()
++    {
++        synchronized (sSync) {
++            if (sEthernetManager == null) {
++                IBinder b = ServiceManager.getService(ETHERNET_SERVICE);
++                if (b == null) 
++                {
++                        Log.w(TAG, "Error getting service name:" + ETHERNET_SERVICE);
++                }
++                IEthernetManager service = IEthernetManager.Stub.asInterface(b);
++                sEthernetManager = new EthernetManager(service, mMainThread.getHandler());
++            }
++        }
++        return sEthernetManager;
++    }
++
+     private NotificationManager getNotificationManager() {
+         synchronized (mSync) {
+             if (mNotificationManager == null) {
+diff --git a/core/java/android/content/Context.java b/core/java/android/content/Context.java
+index ec2d640..901e214 100644
+--- a/core/java/android/content/Context.java
++++ b/core/java/android/content/Context.java
+@@ -1459,6 +1459,16 @@ public abstract class Context {
+     public static final String WIFI_SERVICE = "wifi";
+ 
+     /**
++     * Use with {@link #getSystemService} to retrieve a {@link
++     * android.net.ethernet.EthernetManager} for handling management of
++     * Ethernet access.
++     *
++     * @see #getSystemService
++     * @see android.net.ethernet.EthernetManager
++     */
++    public static final String ETHERNET_SERVICE = "ethernet";
++
++    /**
+      * Use with {@link #getSystemService} to retrieve a
+      * {@link android.media.AudioManager} for handling management of volume,
+      * ringer modes and audio routing.
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index 38c5dc4..608a029 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -2591,6 +2591,19 @@ public final class Settings {
+         public static final String WIFI_ON = "wifi_on";
+ 
+         /**
++         * Ethernet related configurations
++         */
++        public static final String ETHERNET_ON      = "ethernet_on";
++        public static final String ETHERNET_MODE    = "ethernet_mode";
++        public static final String ETHERNET_IP      = "ethernet_ip";
++        public static final String ETHERNET_MASK    = "ethernet_netmask";
++        public static final String ETHERNET_DNS     = "ethernet_dns";
++        public static final String ETHERNET_ROUTE   = "ethernet_iproute";
++        public static final String ETHERNET_CONF    = "ethernet_conf";
++        public static final String ETHERNET_IFNAME  = "ethernet_ifname";
++
++
++        /**
+          * Used to save the Wifi_ON state prior to tethering.
+          * This state will be checked to restore Wifi after
+          * the user turns off tethering.
+diff --git a/core/jni/Android.mk b/core/jni/Android.mk
+index 12b9ca5..79f65a4 100644
+--- a/core/jni/Android.mk
++++ b/core/jni/Android.mk
+@@ -66,6 +66,7 @@ LOCAL_SRC_FILES:= \
+ 	android_net_NetUtils.cpp \
+ 	android_net_TrafficStats.cpp \
+ 	android_net_wifi_Wifi.cpp \
++	android_net_ethernet.cpp \
+ 	android_nio_utils.cpp \
+ 	android_nfc_NdefMessage.cpp \
+ 	android_nfc_NdefRecord.cpp \
+diff --git a/core/jni/AndroidRuntime.cpp b/core/jni/AndroidRuntime.cpp
+index d9759bf..123c7fa 100644
+--- a/core/jni/AndroidRuntime.cpp
++++ b/core/jni/AndroidRuntime.cpp
+@@ -145,6 +145,7 @@ extern int register_android_net_LocalSocketImpl(JNIEnv* env);
+ extern int register_android_net_NetworkUtils(JNIEnv* env);
+ extern int register_android_net_TrafficStats(JNIEnv* env);
+ extern int register_android_net_wifi_WifiManager(JNIEnv* env);
++extern int register_android_net_ethernet_EthernetManager(JNIEnv* env);
+ extern int register_android_security_Md5MessageDigest(JNIEnv *env);
+ extern int register_android_text_AndroidCharacter(JNIEnv *env);
+ extern int register_android_text_AndroidBidi(JNIEnv *env);
+@@ -1255,6 +1256,7 @@ static const RegJNIRec gRegJNI[] = {
+     REG_JNI(register_android_net_NetworkUtils),
+     REG_JNI(register_android_net_TrafficStats),
+     REG_JNI(register_android_net_wifi_WifiManager),
++    REG_JNI(register_android_net_ethernet_EthernetManager),
+     REG_JNI(register_android_nfc_NdefMessage),
+     REG_JNI(register_android_nfc_NdefRecord),
+     REG_JNI(register_android_os_MemoryFile),
+diff --git a/core/jni/android_net_ethernet.cpp b/core/jni/android_net_ethernet.cpp
+new file mode 100644
+index 0000000..b01c199
+--- /dev/null
++++ b/core/jni/android_net_ethernet.cpp
+@@ -0,0 +1,419 @@
++/*
++ * Copyright 2010, The Android-x86 Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ * Author: Yi Sun <beyounn@gmail.com>
++ */
++
++#define LOG_TAG "ethernet"
++
++#include "jni.h"
++#include <inttypes.h>
++#include <utils/misc.h>
++#include <android_runtime/AndroidRuntime.h>
++#include <utils/Log.h>
++#include <asm/types.h>
++#include <linux/netlink.h>
++#include <linux/rtnetlink.h>
++#include <sys/socket.h>
++#include <netinet/in.h>
++#include <poll.h>
++#include <net/if_arp.h>
++#include <fcntl.h>
++#include <errno.h>
++#include <string.h>
++#include <dirent.h>
++
++
++#define ETH_PKG_NAME     "android/net/ethernet/EthernetNative"
++#define NL_SOCK_INV      -1
++#define RET_STR_SZ       4096
++#define NL_POLL_MSG_SZ   8*1024
++#define SYSFS_PATH_MAX   256
++
++namespace android {
++    static struct fieldIds {
++        jclass dhcpInfoClass;
++        jmethodID constructorId;
++        jfieldID ipaddress;
++        jfieldID gateway;
++        jfieldID netmask;
++        jfieldID dns1;
++        jfieldID dns2;
++        jfieldID serverAddress;
++        jfieldID leaseDuration;
++    } dhcpInfoFieldIds;
++
++    struct interface_info_t {
++        unsigned int i;                   /* interface index        */
++        char *name;                       /* name (eth0, eth1, ...) */
++        struct interface_info_t *next;
++    };
++
++    interface_info_t *interfaces = NULL;
++    int total_int = 0;
++    static const char SYSFS_CLASS_NET[] = "/sys/class/net";
++    static int nl_socket_msg = NL_SOCK_INV;
++    static struct sockaddr_nl addr_msg;
++    static int nl_socket_poll = NL_SOCK_INV;
++    static struct sockaddr_nl addr_poll;
++    static int getinterfacename(int index, char *name, size_t len);
++
++    static interface_info_t *find_info_by_index(unsigned int index)
++    {
++        interface_info_t *info = interfaces;
++        while (info) {
++            if (info->i == index)
++                break;
++            info = info->next;
++        }
++        return info;
++    }
++
++    static jstring android_net_ethernet_waitForEvent(JNIEnv *env, jobject clazz)
++    {
++        char *buff;
++        struct nlmsghdr *nh;
++        struct ifinfomsg *einfo;
++        struct iovec iov;
++        struct msghdr msg;
++        char *result = NULL;
++        char rbuf[4096];
++        unsigned int left;
++        interface_info_t *info;
++        int len;
++
++        LOGV("Poll events from ethernet devices");
++        /*
++         *wait on uevent netlink socket for the ethernet device
++         */
++        buff = (char *)malloc(NL_POLL_MSG_SZ);
++        if (!buff) {
++            LOGE("Allocate poll buffer failed");
++            goto error;
++        }
++
++        iov.iov_base = buff;
++        iov.iov_len = NL_POLL_MSG_SZ;
++        msg.msg_name = (void *)&addr_msg;
++        msg.msg_namelen =  sizeof(addr_msg);
++        msg.msg_iov =  &iov;
++        msg.msg_iovlen =  1;
++        msg.msg_control =  NULL;
++        msg.msg_controllen =  0;
++        msg.msg_flags =  0;
++
++        if ((len = recvmsg(nl_socket_poll, &msg, 0)) >= 0) {
++            LOGV("recvmsg get data");
++            result = rbuf;
++            left = 4096;
++            rbuf[0] = '\0';
++            for (nh = (struct nlmsghdr *) buff; NLMSG_OK (nh, len);
++                 nh = NLMSG_NEXT (nh, len)) {
++
++                if (nh->nlmsg_type == NLMSG_DONE) {
++                    LOGE("Did not find useful eth interface information");
++                    goto error;
++                }
++
++                if (nh->nlmsg_type == NLMSG_ERROR) {
++                    /* Do some error handling. */
++                    LOGE("Read device name failed");
++                    goto error;
++                }
++
++                LOGV(" event :%d  found", nh->nlmsg_type);
++                einfo = (struct ifinfomsg *)NLMSG_DATA(nh);
++                LOGV("the device flag :%X", einfo->ifi_flags);
++                if (nh->nlmsg_type == RTM_DELLINK ||
++                    nh->nlmsg_type == RTM_NEWLINK ||
++                    nh->nlmsg_type == RTM_DELADDR ||
++                    nh->nlmsg_type == RTM_NEWADDR) {
++                    int type = nh->nlmsg_type;
++                    if (type == RTM_NEWLINK &&
++                        (!(einfo->ifi_flags & IFF_LOWER_UP))) {
++                        type = RTM_DELLINK;
++                    }
++                    if ((info = find_info_by_index
++                          (((struct ifinfomsg*) NLMSG_DATA(nh))->ifi_index)) != NULL)
++                        snprintf(result,left, "%s:%d:",info->name,type);
++                    left = left - strlen(result);
++                    result =(char *)(result+ strlen(result));
++                }
++
++            }
++            LOGV("Done parsing");
++            rbuf[4096 - left] = '\0';
++            LOGV("poll state :%s, left:%d", rbuf, left);
++        }
++
++
++    error:
++        free(buff);
++        return env->NewStringUTF(rbuf);
++    }
++
++    static int netlink_send_dump_request(int sock, int type, int family)
++    {
++        int ret;
++        char buf[4096];
++        struct sockaddr_nl snl;
++        struct nlmsghdr *nlh;
++        struct rtgenmsg *g;
++
++        memset(&snl, 0, sizeof(snl));
++        snl.nl_family = AF_NETLINK;
++
++        memset(buf, 0, sizeof(buf));
++        nlh = (struct nlmsghdr *)buf;
++        g = (struct rtgenmsg *)(buf + sizeof(struct nlmsghdr));
++
++        nlh->nlmsg_len = NLMSG_LENGTH(sizeof(struct rtgenmsg));
++        nlh->nlmsg_flags = NLM_F_REQUEST|NLM_F_DUMP;
++        nlh->nlmsg_type = type;
++        g->rtgen_family = family;
++
++        ret = sendto(sock, buf, nlh->nlmsg_len, 0, (struct sockaddr *)&snl,
++                     sizeof(snl));
++        if (ret < 0) {
++            perror("netlink_send_dump_request sendto");
++            return -1;
++        }
++
++        return ret;
++    }
++
++    static void free_int_list()
++    {
++        interface_info_t *tmp = interfaces;
++        while (tmp) {
++            if (tmp->name)
++                free(tmp->name);
++            interfaces = tmp->next;
++            free(tmp);
++            tmp = interfaces;
++            total_int--;
++        }
++        if (total_int) {
++            LOGE("Wrong interface count found");
++            total_int = 0;
++        }
++    }
++
++    static void add_int_to_list(interface_info_t *node)
++    {
++        /* Todo: Lock here!!!! */
++        node->next = interfaces;
++        interfaces = node;
++        total_int++;
++    }
++
++    static int netlink_init_interfaces_list(void)
++    {
++        int ret = -1;
++        DIR  *netdir;
++        struct dirent *de;
++        char path[SYSFS_PATH_MAX];
++        interface_info_t *intfinfo;
++        int index;
++        FILE *ifidx;
++        #define MAX_FGETS_LEN 4
++        char idx[MAX_FGETS_LEN+1];
++
++        if ((netdir = opendir(SYSFS_CLASS_NET)) != NULL) {
++             while ((de = readdir(netdir))) {
++                if ((!strcmp(de->d_name, ".")) || (!strcmp(de->d_name, ".."))
++                    ||(!strcmp(de->d_name, "lo")) || (!strcmp(de->d_name, "wmaster0")) ||
++                    (!strcmp(de->d_name, "pan0")))
++                    continue;
++                snprintf(path, SYSFS_PATH_MAX,"%s/%s/phy80211", SYSFS_CLASS_NET, de->d_name);
++                if (!access(path, F_OK))
++                    continue;
++                snprintf(path, SYSFS_PATH_MAX,"%s/%s/wireless", SYSFS_CLASS_NET, de->d_name);
++                if (!access(path, F_OK))
++                        continue;
++
++                snprintf(path, SYSFS_PATH_MAX,"%s/%s/ifindex", SYSFS_CLASS_NET, de->d_name);
++                if ((ifidx = fopen(path, "r")) != NULL) {
++                    memset(idx, 0, MAX_FGETS_LEN+1);
++                    if (fgets(idx,MAX_FGETS_LEN, ifidx) != NULL) {
++                        index = strtoimax(idx, NULL, 10);
++                    } else {
++                        LOGE("Can not read %s", path);
++                        continue;
++                    }
++                } else {
++                    LOGE("Can not open %s for read", path);
++                    continue;
++                }
++                /* make some room! */
++                intfinfo = (interface_info_t *)malloc(sizeof(interface_info_t));
++                if (intfinfo == NULL) {
++                    LOGE("malloc in netlink_init_interfaces_table");
++                    goto error;
++                }
++                /* copy the interface name (eth0, eth1, ...) */
++                intfinfo->name = strndup((char *) de->d_name, SYSFS_PATH_MAX);
++                intfinfo->i = index;
++                LOGI("interface %s:%d found", intfinfo->name, intfinfo->i);
++                add_int_to_list(intfinfo);
++            }
++            closedir(netdir);
++        }
++        ret = 0;
++
++    error:
++        return ret;
++    }
++
++    /*
++     * The netlink socket
++     */
++
++    static jint android_net_ethernet_initEthernetNative(JNIEnv *env,
++                                                        jobject clazz)
++    {
++        int ret = -1;
++
++        memset(&addr_msg, 0, sizeof(sockaddr_nl));
++        addr_msg.nl_family = AF_NETLINK;
++        memset(&addr_poll, 0, sizeof(sockaddr_nl));
++        addr_poll.nl_family = AF_NETLINK;
++        addr_poll.nl_pid = 0;//getpid();
++        addr_poll.nl_groups = RTMGRP_LINK | RTMGRP_IPV4_IFADDR;
++
++        /*
++         *Create connection to netlink socket
++         */
++        nl_socket_msg = socket(AF_NETLINK,SOCK_RAW,NETLINK_ROUTE);
++        if (nl_socket_msg <= 0) {
++            LOGE("Can not create netlink msg socket");
++            goto error;
++        }
++        if (bind(nl_socket_msg, (struct sockaddr *)(&addr_msg),
++                 sizeof(struct sockaddr_nl))) {
++            LOGE("Can not bind to netlink msg socket");
++            goto error;
++        }
++
++        nl_socket_poll = socket(AF_NETLINK,SOCK_RAW,NETLINK_ROUTE);
++        if (nl_socket_poll <= 0) {
++            LOGE("Can not create netlink poll socket");
++            goto error;
++        }
++
++        errno = 0;
++        if (bind(nl_socket_poll, (struct sockaddr *)(&addr_poll),
++                sizeof(struct sockaddr_nl))) {
++            LOGE("Can not bind to netlink poll socket,%s", strerror(errno));
++
++            goto error;
++        }
++
++        if ((ret = netlink_init_interfaces_list()) < 0) {
++            LOGE("Can not collect the interface list");
++            goto error;
++        }
++        LOGE("%s exited with success", __FUNCTION__);
++        return ret;
++
++    error:
++        LOGE("%s exited with error", __FUNCTION__);
++        if (nl_socket_msg > 0)
++            close(nl_socket_msg);
++        if (nl_socket_poll > 0)
++            close(nl_socket_poll);
++        return ret;
++    }
++
++    static jstring android_net_ethernet_getInterfaceName(JNIEnv *env,
++                                                         jobject clazz,
++                                                         jint index)
++    {
++        int i = 0;
++        interface_info_t *info;
++        LOGI("User ask for device name on %d, list:%X, total:%d",
++             index, (unsigned int)interfaces, total_int);
++        info = interfaces;
++        if (total_int != 0 && index <= (total_int - 1)) {
++            while (info) {
++                if (index == i) {
++                    LOGV("Found: %s", info->name);
++                    return env->NewStringUTF(info->name);
++                }
++                info = info->next;
++                i++;
++            }
++        }
++        LOGI("No device name found");
++        return env->NewStringUTF(NULL);
++    }
++
++
++    static jint android_net_ethernet_getInterfaceCnt()
++    {
++        return total_int;
++    }
++
++    static JNINativeMethod gEthernetMethods[] = {
++        {"waitForEvent", "()Ljava/lang/String;",
++         (void *)android_net_ethernet_waitForEvent},
++        {"getInterfaceName", "(I)Ljava/lang/String;",
++         (void *)android_net_ethernet_getInterfaceName},
++        {"initEthernetNative", "()I",
++         (void *)android_net_ethernet_initEthernetNative},
++        {"getInterfaceCnt","()I",
++         (void *)android_net_ethernet_getInterfaceCnt}
++    };
++
++    int register_android_net_ethernet_EthernetManager(JNIEnv* env)
++    {
++        jclass eth = env->FindClass(ETH_PKG_NAME);
++        LOGI("Loading ethernet jni class");
++        LOG_FATAL_IF(eth == NULL, "Unable to find class " ETH_PKG_NAME);
++
++        dhcpInfoFieldIds.dhcpInfoClass =
++            env->FindClass("android/net/DhcpInfo");
++        if (dhcpInfoFieldIds.dhcpInfoClass != NULL) {
++            dhcpInfoFieldIds.constructorId =
++                env->GetMethodID(dhcpInfoFieldIds.dhcpInfoClass,
++                                 "<init>", "()V");
++            dhcpInfoFieldIds.ipaddress =
++                env->GetFieldID(dhcpInfoFieldIds.dhcpInfoClass,
++                                "ipAddress", "I");
++            dhcpInfoFieldIds.gateway =
++                env->GetFieldID(dhcpInfoFieldIds.dhcpInfoClass,
++                                "gateway", "I");
++            dhcpInfoFieldIds.netmask =
++                env->GetFieldID(dhcpInfoFieldIds.dhcpInfoClass,
++                                "netmask", "I");
++            dhcpInfoFieldIds.dns1 =
++                env->GetFieldID(dhcpInfoFieldIds.dhcpInfoClass, "dns1", "I");
++            dhcpInfoFieldIds.dns2 =
++                env->GetFieldID(dhcpInfoFieldIds.dhcpInfoClass, "dns2", "I");
++            dhcpInfoFieldIds.serverAddress =
++                env->GetFieldID(dhcpInfoFieldIds.dhcpInfoClass,
++                                "serverAddress", "I");
++            dhcpInfoFieldIds.leaseDuration =
++                env->GetFieldID(dhcpInfoFieldIds.dhcpInfoClass,
++                                "leaseDuration", "I");
++        }
++
++        return AndroidRuntime::registerNativeMethods(env,
++                                                     ETH_PKG_NAME,
++                                                     gEthernetMethods,
++                                                     NELEM(gEthernetMethods));
++    }
++
++}
+diff --git a/core/res/res/values/config.xml b/core/res/res/values/config.xml
+index 916dd81..af485ee 100755
+--- a/core/res/res/values/config.xml
++++ b/core/res/res/values/config.xml
+@@ -38,6 +38,7 @@
+        <item><xliff:g id="id">mute</xliff:g></item>
+        <item><xliff:g id="id">volume</xliff:g></item>
+        <item><xliff:g id="id">wifi</xliff:g></item>
++       <item><xliff:g id="id">ethernet</xliff:g></item>
+        <item><xliff:g id="id">cdma_eri</xliff:g></item>
+        <item><xliff:g id="id">data_connection</xliff:g></item>
+        <item><xliff:g id="id">phone_evdo_signal</xliff:g></item>
+@@ -95,6 +96,7 @@
+         <item>"mobile_mms,2,0,2"</item>
+         <item>"mobile_supl,3,0,2"</item>
+         <item>"mobile_hipri,5,0,3"</item>
++        <item>"ethernet,9,9,1"</item>
+     </string-array>
+ 
+     <!-- This string array should be overridden by the device to present a list of radio
+diff --git a/ethernet/java/android/net/ethernet/EthernetDevInfo.aidl b/ethernet/java/android/net/ethernet/EthernetDevInfo.aidl
+new file mode 100644
+index 0000000..0f2c965
+--- /dev/null
++++ b/ethernet/java/android/net/ethernet/EthernetDevInfo.aidl
+@@ -0,0 +1,19 @@
++/**
++ * Copyright (c) 2010, The Android-x86 Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package android.net.ethernet;
++
++parcelable EthernetDevInfo;
+diff --git a/ethernet/java/android/net/ethernet/EthernetDevInfo.java b/ethernet/java/android/net/ethernet/EthernetDevInfo.java
+new file mode 100644
+index 0000000..058eb82
+--- /dev/null
++++ b/ethernet/java/android/net/ethernet/EthernetDevInfo.java
+@@ -0,0 +1,152 @@
++/*
++ * Copyright (C) 2010 The Android-X86 Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ * Author: Yi Sun <beyounn@gmail.com>
++ */
++
++
++package android.net.ethernet;
++
++import android.net.ethernet.EthernetDevInfo;
++import android.os.Parcel;
++import android.os.Parcelable;
++import android.os.Parcelable.Creator;
++
++/**
++ * Describes the state of any Ethernet connection that is active or
++ * is in the process of being set up.
++ */
++
++public class EthernetDevInfo implements Parcelable {
++    /**
++     * The ethernet interface is configured by dhcp
++     */
++    public static final String ETHERNET_CONN_MODE_DHCP= "dhcp";
++    /**
++     * The ethernet interface is configured manually
++     */
++    public static final String ETHERNET_CONN_MODE_MANUAL = "manual";
++
++    private String dev_name;
++    private String ipaddr;
++    private String netmask;
++    private String route;
++    private String dns;
++    private String mode;
++
++    public EthernetDevInfo () {
++        dev_name = null;
++        ipaddr = null;
++        dns = null;
++        route = null;
++        netmask = null;
++        mode = ETHERNET_CONN_MODE_DHCP;
++    }
++
++    /**
++     * save interface name into the configuration
++     */
++    public void setIfName(String ifname) {
++        this.dev_name = ifname;
++    }
++
++    /**
++     * Returns the interface name from the saved configuration
++     * @return interface name
++     */
++    public String getIfName() {
++        return this.dev_name;
++    }
++
++    public void setIpAddress(String ip) {
++        this.ipaddr = ip;
++    }
++
++    public String getIpAddress( ) {
++        return this.ipaddr;
++    }
++
++    public void setNetMask(String ip) {
++        this.netmask = ip;
++    }
++
++    public String getNetMask( ) {
++        return this.netmask;
++    }
++
++    public void setRouteAddr(String route) {
++        this.route = route;
++    }
++
++    public String getRouteAddr() {
++        return this.route;
++    }
++
++    public void setDnsAddr(String dns) {
++        this.dns = dns;
++    }
++
++    public String getDnsAddr( ) {
++        return this.dns;
++    }
++
++    /**
++     * Set ethernet configuration mode
++     * @param mode {@code ETHERNET_CONN_MODE_DHCP} for dhcp {@code ETHERNET_CONN_MODE_MANUAL} for manual configure
++     * @return
++     */
++    public boolean setConnectMode(String mode) {
++        if (mode.equals(ETHERNET_CONN_MODE_DHCP) || mode.equals(ETHERNET_CONN_MODE_MANUAL)) {
++            this.mode = mode;
++            return true;
++        }
++        return false;
++    }
++
++    public String getConnectMode() {
++        return this.mode;
++    }
++
++    public int describeContents() {
++        return 0;
++    }
++
++    public void writeToParcel(Parcel dest, int flags) {
++        dest.writeString(this.dev_name);
++        dest.writeString(this.ipaddr);
++        dest.writeString(this.netmask);
++        dest.writeString(this.route);
++        dest.writeString(this.dns);
++        dest.writeString(this.mode);
++    }
++
++    /** Implement the Parcelable interface {@hide} */
++    public static final Creator<EthernetDevInfo> CREATOR = new Creator<EthernetDevInfo>() {
++        public EthernetDevInfo createFromParcel(Parcel in) {
++            EthernetDevInfo info = new EthernetDevInfo();
++            info.setIfName(in.readString());
++            info.setIpAddress(in.readString());
++            info.setNetMask(in.readString());
++            info.setRouteAddr(in.readString());
++            info.setDnsAddr(in.readString());
++            info.setConnectMode(in.readString());
++            return info;
++        }
++
++        public EthernetDevInfo[] newArray(int size) {
++            return new EthernetDevInfo[size];
++        }
++    };
++}
+diff --git a/ethernet/java/android/net/ethernet/EthernetManager.java b/ethernet/java/android/net/ethernet/EthernetManager.java
+new file mode 100644
+index 0000000..1d01aa3
+--- /dev/null
++++ b/ethernet/java/android/net/ethernet/EthernetManager.java
+@@ -0,0 +1,158 @@
++/*
++ * Copyright (C) 2010 The Android-X86 Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ * Author: Yi Sun <beyounn@gmail.com>
++ */
++
++package android.net.ethernet;
++
++import java.util.List;
++import android.annotation.SdkConstant;
++import android.annotation.SdkConstant.SdkConstantType;
++import android.net.wifi.IWifiManager;
++import android.os.Handler;
++import android.os.RemoteException;
++import android.util.Slog;
++
++/**
++ * This class provides the primary API for managing all aspects of Ethernet
++ * connectivity. Get an instance of this class by calling
++ * {@link android.content.Context#getSystemService(String) Context.getSystemService(Context.ETHERNET_SERVICE)}.
++ *
++ * This is the API to use when performing Ethernet specific operations. To
++ * perform operations that pertain to network connectivity at an abstract
++ * level, use {@link android.net.ConnectivityManager}.
++ */
++public class EthernetManager {
++    public static final String TAG = "EthernetManager";
++    public static final int ETHERNET_DEVICE_SCAN_RESULT_READY = 0;
++    public static final String ETHERNET_STATE_CHANGED_ACTION =
++            "android.net.ethernet.ETHERNET_STATE_CHANGED";
++    public static final String NETWORK_STATE_CHANGED_ACTION =
++            "android.net.ethernet.STATE_CHANGE";
++
++    public static final String EXTRA_NETWORK_INFO = "networkInfo";
++    public static final String EXTRA_ETHERNET_STATE = "ETHERNET_state";
++    public static final String EXTRA_PREVIOUS_ETHERNET_STATE = "previous_ETHERNET_state";
++
++    public static final int ETHERNET_STATE_UNKNOWN = 0;
++    public static final int ETHERNET_STATE_DISABLED = 1;
++    public static final int ETHERNET_STATE_ENABLED = 2;
++
++    IEthernetManager mService;
++    Handler mHandler;
++
++    public EthernetManager(IEthernetManager service, Handler handler) {
++        Slog.i(TAG, "Init Ethernet Manager, service: " +service);
++        mService = service;
++        mHandler = handler;
++    }
++
++    /**
++     * check if the ethernet service has been configured.
++     * @return {@code true} if configured {@code false} otherwise
++     */
++    public boolean isConfigured() {
++        try {
++            return mService.isConfigured();
++        } catch (RemoteException e) {
++            Slog.i(TAG, "Can not check eth config state");
++        }
++        return false;
++    }
++
++    /**
++     * Return the saved ethernet configuration
++     * @return ethernet interface configuration on success, {@code null} on failure
++     */
++    public EthernetDevInfo getSavedConfig() {
++        try {
++            return mService.getSavedConfig();
++        } catch (RemoteException e) {
++            Slog.i(TAG, "Can not get eth config");
++        }
++        return null;
++    }
++
++    /**
++     * update a ethernet interface information
++     * @param info  the interface infomation
++     */
++    public void updateDevInfo(EthernetDevInfo info) {
++        try {
++            mService.updateDevInfo(info);
++        } catch (RemoteException e) {
++            Slog.i(TAG, "Can not update ethernet device info");
++        }
++    }
++
++    /**
++     * get all the ethernet device names
++     * @return interface name list on success, {@code null} on failure
++     */
++    public String[] getDeviceNameList() {
++        try {
++            return mService.getDeviceNameList();
++        } catch (RemoteException e) {
++            return null;
++        }
++    }
++    /**
++     * Enable or Disable a ethernet service
++     * @param enable {@code true} to enable, {@code false} to disable
++     * @hide
++     */
++    public void setEnabled(boolean enable) {
++        try {
++            mService.setState(enable ? ETHERNET_STATE_ENABLED:ETHERNET_STATE_DISABLED);
++        } catch (RemoteException e) {
++            Slog.i(TAG,"Can not set new state");
++        }
++    }
++
++    /**
++     * Get ethernet service state
++     * @return the state of the ethernet service
++     */
++    public int getState( ) {
++        try {
++            return mService.getState();
++        } catch (RemoteException e) {
++            return 0;
++        }
++    }
++
++    /**
++     * get the number of ethernet interfaces in the system
++     * @return the number of ethernet interfaces
++     */
++    public int getTotalInterface() {
++        try {
++            return mService.getTotalInterface();
++        } catch (RemoteException e) {
++            return 0;
++        }
++    }
++
++    /**
++     * @hide
++     */
++    public void setDefaultConf() {
++        try {
++            mService.setMode(EthernetDevInfo.ETHERNET_CONN_MODE_DHCP);
++        } catch (RemoteException e) {
++        }
++    }
++}
+diff --git a/ethernet/java/android/net/ethernet/EthernetMonitor.java b/ethernet/java/android/net/ethernet/EthernetMonitor.java
+new file mode 100644
+index 0000000..fb4b1d9
+--- /dev/null
++++ b/ethernet/java/android/net/ethernet/EthernetMonitor.java
+@@ -0,0 +1,134 @@
++/*
++ * Copyright (C) 2010 The Android-X86 Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ * Author: Yi Sun <beyounn@gmail.com>
++ */
++
++package android.net.ethernet;
++
++import java.util.regex.Matcher;
++
++import android.net.NetworkInfo;
++import android.util.Config;
++import android.util.Slog;
++import java.util.StringTokenizer;
++
++/**
++ * Listens for events from kernel, and passes them on
++ * to the {@link EtherentStateTracker} for handling. Runs in its own thread.
++ *
++ * @hide
++ */
++public class EthernetMonitor {
++    private static final String TAG = "EthernetMonitor";
++    private static final int CONNECTED = 1;
++    private static final int DISCONNECTED = 2;
++    private static final int PHYUP = 3;
++    private static final String connectedEvent = "CONNECTED";
++    private static final String disconnectedEvent = "DISCONNECTED";
++    private static final int ADD_ADDR = 20;
++    private static final int RM_ADDR = 21;
++    private static final int NEW_LINK = 16;
++    private static final int DEL_LINK = 17;
++    private static final boolean localLOGV = false;
++
++    private EthernetStateTracker mTracker;
++
++    public EthernetMonitor(EthernetStateTracker tracker) {
++        mTracker = tracker;
++    }
++
++    public void startMonitoring() {
++        new MonitorThread().start();
++    }
++
++    class MonitorThread extends Thread {
++        public MonitorThread() {
++            super("EthMonitor");
++        }
++
++        public void run() {
++            //noinspection InfiniteLoopStatement
++            for (;;) {
++                int index;
++                int i;
++                int cmd;
++                String dev;
++
++                if (localLOGV) Slog.v(TAG, "go poll events");
++
++                String eventName = EthernetNative.waitForEvent();
++
++                if (eventName == null) {
++                    continue;
++                }
++
++                if (localLOGV) Slog.v(TAG, "get event " + eventName);
++
++                /*
++                 * Map event name into event enum
++                 */
++                i = 0;
++                while (i < eventName.length()) {
++                    index = eventName.substring(i).indexOf(":");
++                    if (index == -1)
++                        break;
++                    dev = eventName.substring(i, index);
++                    i += index + 1;
++                    index = eventName.substring(i).indexOf(":");
++                    if (index == -1)
++                        break;
++                    cmd = Integer.parseInt(eventName.substring(i, i+index));
++                    i += index + 1;
++                    if (localLOGV) Slog.v(TAG, "dev: " + dev + " ev " + cmd);
++                    switch (cmd) {
++                        case DEL_LINK:
++                            handleEvent(dev, DISCONNECTED);
++                            break;
++                        case ADD_ADDR:
++                            handleEvent(dev, CONNECTED);
++                            break;
++                        case NEW_LINK:
++                            handleEvent(dev, PHYUP);
++                            break;
++                    }
++                }
++            }
++        }
++
++        /**
++         * Handle all supplicant events except STATE-CHANGE
++         * @param event the event type
++         * @param remainder the rest of the string following the
++         * event name and &quot;&#8195;&#8212;&#8195;&quot;
++         */
++        void handleEvent(String ifname,int event) {
++            switch (event) {
++                case DISCONNECTED:
++                    mTracker.notifyStateChange(ifname,NetworkInfo.DetailedState.DISCONNECTED);
++                    break;
++                case CONNECTED:
++                    mTracker.notifyStateChange(ifname,NetworkInfo.DetailedState.CONNECTED);
++                    break;
++                case PHYUP:
++                    mTracker.notifyPhyConnected(ifname);
++                    break;
++                default:
++                    mTracker.notifyStateChange(ifname,NetworkInfo.DetailedState.FAILED);
++                    break;
++            }
++        }
++    }
++}
+diff --git a/ethernet/java/android/net/ethernet/EthernetNative.java b/ethernet/java/android/net/ethernet/EthernetNative.java
+new file mode 100644
+index 0000000..7f3a083
+--- /dev/null
++++ b/ethernet/java/android/net/ethernet/EthernetNative.java
+@@ -0,0 +1,30 @@
++/*
++ * Copyright (C) 2010 The Android-X86 Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ * Author: Yi Sun <beyounn@gmail.com>
++ */
++
++package android.net.ethernet;
++
++/**
++ * Native calls for sending requests to the kernel,
++ * {@hide}
++ */
++public class EthernetNative {
++    public native static String getInterfaceName(int i);
++    public native static int getInterfaceCnt();
++    public native static int initEthernetNative();
++    public native static String waitForEvent();
++}
+diff --git a/ethernet/java/android/net/ethernet/EthernetStateTracker.java b/ethernet/java/android/net/ethernet/EthernetStateTracker.java
+new file mode 100644
+index 0000000..3d1b81d
+--- /dev/null
++++ b/ethernet/java/android/net/ethernet/EthernetStateTracker.java
+@@ -0,0 +1,416 @@
++/*
++ * Copyright (C) 2010 The Android-X86 Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ * Author: Yi Sun <beyounn@gmail.com>
++ */
++
++package android.net.ethernet;
++
++import java.net.InetAddress;
++import java.net.UnknownHostException;
++
++import android.R;
++import android.app.Notification;
++import android.app.NotificationManager;
++import android.app.PendingIntent;
++import android.bluetooth.BluetoothHeadset;
++import android.content.Context;
++import android.content.Intent;
++import android.net.ConnectivityManager;
++import android.net.DhcpInfo;
++import android.net.NetworkStateTracker;
++import android.net.NetworkUtils;
++import android.net.NetworkInfo.DetailedState;
++import android.net.wifi.WifiManager;
++import android.os.Handler;
++import android.os.HandlerThread;
++import android.os.Looper;
++import android.os.Message;
++import android.os.Parcel;
++import android.os.SystemProperties;
++import android.util.*;
++
++/**
++ * Track the state of Ethernet connectivity. All event handling is done here,
++ * and all changes in connectivity state are initiated here.
++ *
++ * @hide
++ */
++
++public class EthernetStateTracker extends NetworkStateTracker {
++    private static final String TAG                                 = "EthernetStateTracker";
++    public static final int EVENT_DHCP_START                        = 0;
++    public static final int EVENT_INTERFACE_CONFIGURATION_SUCCEEDED = 1;
++    public static final int EVENT_INTERFACE_CONFIGURATION_FAILED    = 2;
++    public static final int EVENT_HW_CONNECTED                      = 3;
++    public static final int EVENT_HW_DISCONNECTED                   = 4;
++    public static final int EVENT_HW_PHYCONNECTED                   = 5;
++    private static final int NOTIFY_ID                              = 6;
++    private static final boolean localLOGV = true;
++
++    private EthernetManager mEM;
++    private boolean mServiceStarted;
++
++    private boolean mStackConnected;
++    private boolean mHWConnected;
++    private boolean mInterfaceStopped;
++    private DhcpHandler mDhcpTarget;
++    private String mInterfaceName ;
++    private DhcpInfo mDhcpInfo;
++    private EthernetMonitor mMonitor;
++    private String[] sDnsPropNames;
++    private boolean mStartingDhcp;
++    private NotificationManager mNotificationManager;
++    private Notification mNotification;
++    private Handler mTrackerTarget;
++
++    public EthernetStateTracker(Context context, Handler target) {
++        super(context, target, ConnectivityManager.TYPE_ETHERNET, 0, "ETH", "");
++        if (localLOGV) Slog.v(TAG, "Starts...");
++
++        if (EthernetNative.initEthernetNative() != 0) {
++            Slog.e(TAG,"Can not init ethernet device layers");
++            return;
++        }
++
++        if (localLOGV) Slog.v(TAG,"Successed");
++        mServiceStarted = true;
++        HandlerThread dhcpThread = new HandlerThread("DHCP Handler Thread");
++        dhcpThread.start();
++        mDhcpTarget = new DhcpHandler(dhcpThread.getLooper(), this);
++        mMonitor = new EthernetMonitor(this);
++        mDhcpInfo = new DhcpInfo();
++    }
++
++    /**
++     * Stop etherent interface
++     * @param suspend {@code false} disable the interface {@code true} only reset the connection without disable the interface
++     * @return true
++     */
++    public boolean stopInterface(boolean suspend) {
++        if (mEM != null) {
++            EthernetDevInfo info = mEM.getSavedConfig();
++            if (info != null && mEM.isConfigured()) {
++                synchronized (mDhcpTarget) {
++                    mInterfaceStopped = true;
++                    if (localLOGV) Slog.i(TAG, "stop dhcp and interface");
++                    mDhcpTarget.removeMessages(EVENT_DHCP_START);
++                    String ifname = info.getIfName();
++
++                    if (!NetworkUtils.stopDhcp(ifname)) {
++                        if (localLOGV) Slog.w(TAG, "Could not stop DHCP");
++                    }
++                    NetworkUtils.resetConnections(ifname);
++                    if (!suspend)
++                        NetworkUtils.disableInterface(ifname);
++                }
++            }
++        }
++
++        return true;
++    }
++
++    private boolean configureInterface(EthernetDevInfo info) throws UnknownHostException {
++
++        mStackConnected = false;
++        mHWConnected = false;
++        mInterfaceStopped = false;
++        mStartingDhcp = true;
++        if (info.getConnectMode().equals(EthernetDevInfo.ETHERNET_CONN_MODE_DHCP)) {
++            if (localLOGV) Slog.i(TAG, "trigger dhcp for device " + info.getIfName());
++            sDnsPropNames = new String[] {
++                "dhcp." + mInterfaceName + ".dns1",
++                "dhcp." + mInterfaceName + ".dns2"
++             };
++
++            mDhcpTarget.sendEmptyMessage(EVENT_DHCP_START);
++        } else {
++            int event;
++            sDnsPropNames = new String[] {
++                "net." + mInterfaceName + ".dns1",
++                "net." + mInterfaceName + ".dns2"
++             };
++            mDhcpInfo.ipAddress = lookupHost(info.getIpAddress());
++            mDhcpInfo.gateway = lookupHost(info.getRouteAddr());
++            mDhcpInfo.netmask = lookupHost(info.getNetMask());
++            mDhcpInfo.dns1 = lookupHost(info.getDnsAddr());
++            mDhcpInfo.dns2 = 0;
++
++            if (localLOGV) Slog.i(TAG, "set ip manually " + mDhcpInfo.toString());
++            NetworkUtils.removeDefaultRoute(info.getIfName());
++            if (NetworkUtils.configureInterface(info.getIfName(), mDhcpInfo)) {
++                event = EVENT_INTERFACE_CONFIGURATION_SUCCEEDED;
++                SystemProperties.set("net.dns1", info.getDnsAddr());
++		SystemProperties.set("net." + info.getIfName() + ".dns1", info.getDnsAddr());
++		SystemProperties.set("net." + info.getIfName() + ".dns2", "0.0.0.0");
++                if (localLOGV) Slog.v(TAG, "Static IP configuration succeeded");
++            } else {
++                event = EVENT_INTERFACE_CONFIGURATION_FAILED;
++                if (localLOGV) Slog.w(TAG, "Static IP configuration failed");
++            }
++            this.sendEmptyMessage(event);
++        }
++        return true;
++    }
++
++    /**
++     * reset ethernet interface
++     * @return true
++     * @throws UnknownHostException
++     */
++    public boolean resetInterface()  throws UnknownHostException{
++        /*
++         * This will guide us to enabled the enabled device
++         */
++        if (mEM != null) {
++            EthernetDevInfo info = mEM.getSavedConfig();
++            if (info != null && mEM.isConfigured()) {
++                synchronized (this) {
++                    mInterfaceName = info.getIfName();
++                    if (localLOGV) Slog.i(TAG, "reset device " + mInterfaceName);
++                    NetworkUtils.resetConnections(mInterfaceName);
++                     // Stop DHCP
++                    if (mDhcpTarget != null) {
++                        mDhcpTarget.removeMessages(EVENT_DHCP_START);
++                    }
++                    if (!NetworkUtils.stopDhcp(mInterfaceName)) {
++                        if (localLOGV) Slog.w(TAG, "Could not stop DHCP");
++                    }
++                    configureInterface(info);
++                }
++            }
++        }
++        return true;
++    }
++
++    @Override
++    public String[] getNameServers() {
++        return getNameServerList(sDnsPropNames);
++    }
++
++    @Override
++    public String getTcpBufferSizesPropName() {
++        return "net.tcp.buffersize.default";
++    }
++
++    public void StartPolling() {
++        mMonitor.startMonitoring();
++    }
++    @Override
++    public boolean isAvailable() {
++        // Only say available if we have interfaces and user did not disable us.
++        return ((mEM.getTotalInterface() != 0) && (mEM.getState() != EthernetManager.ETHERNET_STATE_DISABLED));
++    }
++
++    @Override
++    public boolean reconnect() {
++        try {
++            synchronized (this) {
++                if (mHWConnected && mStackConnected)
++                    return true;
++            }
++            if (mEM.getState() != EthernetManager.ETHERNET_STATE_DISABLED) {
++                // maybe this is the first time we run, so set it to enabled
++                mEM.setEnabled(true);
++                if (!mEM.isConfigured()) {
++                    mEM.setDefaultConf();
++                }
++                return resetInterface();
++            }
++        } catch (UnknownHostException e) {
++            e.printStackTrace();
++        }
++        return false;
++
++    }
++
++    @Override
++    public boolean setRadio(boolean turnOn) {
++        return false;
++    }
++
++    @Override
++    public void startMonitoring() {
++        if (localLOGV) Slog.v(TAG,"start to monitor the ethernet devices");
++        if (mServiceStarted) {
++            mEM = (EthernetManager)mContext.getSystemService(Context.ETHERNET_SERVICE);
++            int state = mEM.getState();
++            if (state != mEM.ETHERNET_STATE_DISABLED) {
++                if (state == mEM.ETHERNET_STATE_UNKNOWN) {
++                    // maybe this is the first time we run, so set it to enabled
++                    mEM.setEnabled(mEM.getDeviceNameList() != null);
++                } else {
++                    try {
++                        resetInterface();
++                    } catch (UnknownHostException e) {
++                        Slog.e(TAG, "Wrong ethernet configuration");
++                    }
++                }
++            }
++        }
++    }
++
++    @Override
++    public int startUsingNetworkFeature(String feature, int callingPid, int callingUid) {
++        return 0;
++    }
++
++    @Override
++    public int stopUsingNetworkFeature(String feature, int callingPid, int callingUid) {
++        return 0;
++    }
++
++    @Override
++    public boolean teardown() {
++        return (mEM != null) ? stopInterface(false) : false;
++    }
++
++    private void postNotification(int event) {
++        String ns = Context.NOTIFICATION_SERVICE;
++        //mNotificationManager = (NotificationManager)mContext.getSystemService(ns);
++        Intent intent = new Intent(EthernetManager.ETHERNET_STATE_CHANGED_ACTION);
++        intent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
++        intent.putExtra(EthernetManager.EXTRA_ETHERNET_STATE, event);
++        mContext.sendStickyBroadcast(intent);
++    }
++
++    private void setState(boolean state, int event) {
++        if (mNetworkInfo.isConnected() != state) {
++            if (state) {
++                setDetailedState(DetailedState.CONNECTED);
++                //mTarget.sendEmptyMessage(EVENT_CONFIGURATION_CHANGED);
++            } else {
++                setDetailedState(DetailedState.DISCONNECTED);
++                stopInterface(true);
++            }
++            mNetworkInfo.setIsAvailable(state);
++            postNotification(event);
++        }
++    }
++
++    public void handleMessage(Message msg) {
++
++        synchronized (this) {
++            switch (msg.what) {
++            case EVENT_INTERFACE_CONFIGURATION_SUCCEEDED:
++                if (localLOGV) Slog.i(TAG, "received configured succeeded, stack=" + mStackConnected + " HW=" + mHWConnected);
++                mStackConnected = true;
++                if (mHWConnected)
++                    setState(true, msg.what);
++                break;
++            case EVENT_INTERFACE_CONFIGURATION_FAILED:
++                mStackConnected = false;
++                //start to retry ?
++                break;
++            case EVENT_HW_CONNECTED:
++                if (localLOGV) Slog.i(TAG, "received HW connected, stack=" + mStackConnected + " HW=" + mHWConnected);
++                mHWConnected = true;
++                if (mStackConnected)
++                    setState(true, msg.what);
++                break;
++            case EVENT_HW_DISCONNECTED:
++                if (localLOGV) Slog.i(TAG, "received disconnected events, stack=" + mStackConnected + " HW=" + mHWConnected);
++                setState(mHWConnected = false, msg.what);
++                break;
++            case EVENT_HW_PHYCONNECTED:
++                if (localLOGV) Slog.i(TAG, "interface up event, kick off connection request");
++                if (!mStartingDhcp) {
++                    int state = mEM.getState();
++                    if (state != mEM.ETHERNET_STATE_DISABLED) {
++                        EthernetDevInfo info = mEM.getSavedConfig();
++                        if (info != null && mEM.isConfigured()) {
++                            try {
++                                configureInterface(info);
++                            } catch (UnknownHostException e) {
++                                 // TODO Auto-generated catch block
++                                 //e.printStackTrace();
++                                 Slog.e(TAG, "Cannot configure interface");
++                            }
++                        }
++                    }
++                }
++                break;
++            }
++        }
++    }
++
++    private class DhcpHandler extends Handler {
++         public DhcpHandler(Looper looper, Handler target) {
++             super(looper);
++             mTrackerTarget = target;
++         }
++
++         public void handleMessage(Message msg) {
++             int event;
++
++             switch (msg.what) {
++                 case EVENT_DHCP_START:
++                     synchronized (mDhcpTarget) {
++                         if (!mInterfaceStopped) {
++                             if (localLOGV) Slog.d(TAG, "DhcpHandler: DHCP request started");
++                             if (NetworkUtils.runDhcp(mInterfaceName, mDhcpInfo)) {
++                                 event = EVENT_INTERFACE_CONFIGURATION_SUCCEEDED;
++                                 if (localLOGV) Slog.d(TAG, "DhcpHandler: DHCP request succeeded: " + mDhcpInfo.toString());
++                             } else {
++                                 event = EVENT_INTERFACE_CONFIGURATION_FAILED;
++                                 Slog.e(TAG, "DhcpHandler: DHCP request failed: " + NetworkUtils.getDhcpError());
++                             }
++                             mTrackerTarget.sendEmptyMessage(event);
++                         } else {
++                             mInterfaceStopped = false;
++                         }
++                         mStartingDhcp = false;
++                     }
++                     break;
++             }
++         }
++    }
++
++    public void notifyPhyConnected(String ifname) {
++        if (localLOGV) Slog.v(TAG, "report interface is up for " + ifname);
++        synchronized(this) {
++            this.sendEmptyMessage(EVENT_HW_PHYCONNECTED);
++        }
++
++    }
++
++    public void notifyStateChange(String ifname,DetailedState state) {
++        if (localLOGV) Slog.i(TAG, "report new state " + state.toString() + " on dev " + ifname);
++        if (ifname.equals(mInterfaceName)) {
++            if (localLOGV) Slog.v(TAG, "update network state tracker");
++            synchronized(this) {
++                this.sendEmptyMessage(state.equals(DetailedState.CONNECTED)
++                    ? EVENT_HW_CONNECTED : EVENT_HW_DISCONNECTED);
++            }
++        }
++    }
++
++    private static int lookupHost(String hostname) {
++        InetAddress inetAddress;
++        try {
++            inetAddress = InetAddress.getByName(hostname);
++        } catch (UnknownHostException e) {
++            return -1;
++        }
++        byte[] addrBytes;
++        int addr;
++        addrBytes = inetAddress.getAddress();
++        addr = ((addrBytes[3] & 0xff) << 24)
++                | ((addrBytes[2] & 0xff) << 16)
++                | ((addrBytes[1] & 0xff) << 8)
++                |  (addrBytes[0] & 0xff);
++        return addr;
++    }
++}
+diff --git a/ethernet/java/android/net/ethernet/IEthernetManager.aidl b/ethernet/java/android/net/ethernet/IEthernetManager.aidl
+new file mode 100644
+index 0000000..ce6e852
+--- /dev/null
++++ b/ethernet/java/android/net/ethernet/IEthernetManager.aidl
+@@ -0,0 +1,30 @@
++/**
++ * Copyright (c) 2010, The Android-x86 Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package android.net.ethernet;
++import android.net.ethernet.EthernetDevInfo;
++
++interface IEthernetManager
++{
++    String[] getDeviceNameList();
++    void setState(int state);
++    int getState( );
++    void updateDevInfo(in EthernetDevInfo info);
++    boolean isConfigured();
++    EthernetDevInfo getSavedConfig();
++    int getTotalInterface();
++    void setMode(String mode);
++}
+diff --git a/packages/SystemUI/res/drawable-hdpi/connect_creating.png b/packages/SystemUI/res/drawable-hdpi/connect_creating.png
+new file mode 100755
+index 0000000000000000000000000000000000000000..a70572ccb3fb058a10ff9d84f49d20178bdead1e
+GIT binary patch
+literal 429
+zcmV;e0aE^nP)<h;3K|Lk000e1NJLTq000~S001Tk1^@s6*X;XW0000PbVXQnQ*UN;
+zcVTj606}DLVr3vnZDD6+Qe|Oed2z{QJOBUzPf0{URCwC#S3zooFckgK3L=Ogxab+W
+zbSb@v2be?60bIK18R|yx8r_Q^qUf&)lc9AIO(z-YfPW(<eqVm_-up@r5%vrVc8&w^
+z`2k<<Ny_tFiQ3aNLEra~rYX?^jG{>CxvuM=u50}YJ<n5qwrLuDKpNvX!Y~YwBnc7C
+zS5<{ZNkhSw+x1YEQbN!(I&^46his*m1+MGfXp)WvLBOt?fai*+_p14QZ}17e@82xM
+zaUAm%@@jV5QW|j_Uo}{kC9dgG1yGiVI=VE%(xNDkyHA#7t2`h-ziAev*{tyO>w}So
+zdu!Xa%sXkdqE4ZGhG7^oM%uQ0HFbK=T}ZUWMp;UMIk>1(YyqMQOXp({=APb>99}A8
+zCW_`xF+OL7zgEA{CC=mIGQL`=gh*0AlqDz{!(+_*Pp!<5@X0;IA;<sW0r>9$zXcco
+XDnyO}GjU2<00000NkvXXu0mjf`klQQ
+
+literal 0
+HcmV?d00001
+
+diff --git a/packages/SystemUI/res/drawable-hdpi/connect_established.png b/packages/SystemUI/res/drawable-hdpi/connect_established.png
+new file mode 100755
+index 0000000000000000000000000000000000000000..0de01af189634681c6257219074f5fc00723e34a
+GIT binary patch
+literal 564
+zcmV-40?Yl0P)<h;3K|Lk000e1NJLTq000~S001Tk1^@s6*X;XW0000PbVXQnQ*UN;
+zcVTj606}DLVr3vnZDD6+Qe|Oed2z{QJOBUz)=5M`RCwC#mrG8=Fc608)G4o0kU$kX
+zH~<n0PQ#W3H{cp9y6i1D2v>jw5}=4jp)W$3n2GdT8ksnD+O!MQkv`RV*nd2pv8O^Q
+z)mWtkjTPHkuy&KW(Z3U}cgtQVjl8RK^;git6cf!VPE7a;in^CTI>a;q5Q~aRhgd#%
+z6G&hRc8D3sfU>Qt^biY)7O}xZxor_Y=##kCSX$OBz_Sno=IlT;ESTYhUC+uQT3T|m
+z$;8^k9?+uP4v9}gB&i}OAlQOn2ZJ6EyST@#i;v9Rn6h7|AYVIa2<}5LZ*Lo8+%6KO
+z>HpnJ=d?cYPCOAk+&dwL#1!e0`3jyAN5nDcB2q7m{?ZZ)3%OJ{PKz7Xewf##3PF^z
+zt;-CmOH1EZ+oZ|_XGq`}>+xNX^tA>}0+BH>LjEoFc)IuKe@%Q45%EmC;o~A~jcMI!
+zk*CA}OyH5kC_9u*aGr|z1vxjsZ;ae)_@0OS9Mt>i0ME{dO}Hw6yQW}_8O8`UZ$X|8
+zMeYk(ADuFKRx#X}RozQ<d5{?g>mvf<3k-2RWn%hx%1gt-GDB9ZF(cM)vl@o8w9R|8
+z>eC`9@QToFTO}_ml=Q;mBb=!v)_+LXf>rHTfB^tJiGsKF25g@I0000<MNUMnLSTYO
+C82Ir3
+
+literal 0
+HcmV?d00001
+
+diff --git a/packages/SystemUI/res/drawable-hdpi/connect_no.png b/packages/SystemUI/res/drawable-hdpi/connect_no.png
+new file mode 100755
+index 0000000000000000000000000000000000000000..ea63cdd589b194f53235099e06441941c02da21e
+GIT binary patch
+literal 438
+zcmV;n0ZIOeP)<h;3K|Lk000e1NJLTq000~S001Tk1^@s6*X;XW0000PbVXQnQ*UN;
+zcVTj606}DLVr3vnZDD6+Qe|Oed2z{QJOBUzSV=@dRCwC#mpuxDKoEsjjUs{wg0+XR
+z^cI#L(9*^;*a#j*Y(&uwBWw_}CNsMxB;YjS@0*!@pQ8rnoP9G)_T{()|6lN?a#LBB
+zC~Ggv!p3oAd7c|uf>9Kqt{aAdbzP@lq33z%Yx};}7lfGSnN8Eg(lj+>=i9dBr<w-D
+z_U-zpOTiGZMi+;taJXh_n#^_GCnn)o5CrS?tsoWXIF6a``%j73wvDTh3iMGG=$2A}
+zPLkxoVAC}G6_<x=s0uWeOY;n%>$>J5*`g>osX_|SRaJ2?jaUj{ATXb7QfOfT5r*OF
+zNXxPw9)Nw3w5(HFf_s;Oun?C`3aKCk=&eh)0qeML<)I+71RhKUdK-@8;7zk{i|T6+
+zB`9kV7U<Kah3cSH5~KjFJf6UvU=AwK%7QR4gd<-8EgNNk%sVIFFrR=jptCGfs?fOp
+g4==%=7rYBF0D~6DQDM)#O8@`>07*qoM6N<$f`|#ep8x;=
+
+literal 0
+HcmV?d00001
+
+diff --git a/packages/SystemUI/res/drawable-mdpi/connect_creating.png b/packages/SystemUI/res/drawable-mdpi/connect_creating.png
+new file mode 100755
+index 0000000000000000000000000000000000000000..cb507da3f1198020bd0ad68a7032bd00b36ed484
+GIT binary patch
+literal 476
+zcmV<20VDp2P)<h;3K|Lk000e1NJLTq000vJ000>X1^@s6)5{gA0000PbVXQnQ*UN;
+zcVTj606}DLVr3vnZDD6+Qe|Oed2z{QJOBUzen~_@RCwC#Rl!PxP!zpa$I%RNB`xP8
+z0yq9ZyV=hNM2mi*RkV+Yh(5rj;2#JUh|rg`k|`NAym{y4jKy<itXZ_^f^fM!&pY>=
+z``$w$f_;SodyKyeHri!T5Cl?T>$--rEMYdA;m%-=<4Eg^#R9S{8^%o6b*QQeJkP^!
+zJ&t3V&*#H5W1udBUm3vKa7%kJKv5Jh3}a;k=eBM4gIxyL;~2nu32-ub1k18k;F_jE
+zQ5148+v(A(>F%|Ws}(;@Q(_HW*Tr6DW4&Qe0i1jEWzkKHq<k8dB*~I}p63vTAx)=K
+zlp4T5ZyOAYqKLS?wnYx#_esi(wJA3kW|}6bs=CVAVQ#k@*j_=mPe{zH1sodyhql-x
+zdjU9_0G=L;wGYooP2R8BNE1IFSnW87TG=tI0oiTN&fN7*_bC!<*w(gz^qzpb1c_TK
+za)7H4>Bslkb<~W3B3e|1VQ}Fu0l$CSkCS0GK<YZDT8xZLY+2y{gEBZi1Q-A=XQ2GO
+S15R210000<MNUMnLSTXjmC&aE
+
+literal 0
+HcmV?d00001
+
+diff --git a/packages/SystemUI/res/drawable-mdpi/connect_established.png b/packages/SystemUI/res/drawable-mdpi/connect_established.png
+new file mode 100755
+index 0000000000000000000000000000000000000000..0118ec0b109ad7a791cca013ae1f40352c77ceb6
+GIT binary patch
+literal 562
+zcmV-20?qx2P)<h;3K|Lk000e1NJLTq000vJ000>X1^@s6)5{gA0000PbVXQnQ*UN;
+zcVTj606}DLVr3vnZDD6+Qe|Oed2z{QJOBUz)Ja4^RCwCtRZC6+K@crw1{fg(jUvW?
+z#D#IG3CD47ynr0Wh39bN5lq|~HX2>1Ax6FqziD3$)n*vVal_6^UZ(o@x~gASPsSKS
+z>oSMdXlo_&taEjjNseU_UpABYMt0sb%VY_XCA>Y+M2jR0iDo>~Tx{qmkvIvs<%*ux
+zG$0yul{AGcS}grp`_1JM!IUWH(=OUGfa5_Ajh((uW+Pz|AJ_m2K%R+)-H2=(?XMVg
+z0ffjCq7qOBHi06a%_NBC>;paEGgVFTa}p5~Re>E~%W<Np2twTQMD~m26f#U4rYTl!
+zV3(4l0CEq9F&Y0t_LpLa<{HgTIHwk$q2to2U!ZrtL8BG2m|`br)`3Id0Js#zScn!o
+zV=V7>=)O{;np#d)G1%P74g_|5)Tc8}kKtw)ea{c{qNW*Bj7j+Xx^gulLrR?5k8i?7
+z0J8ZqSxm9ErWlAW<XU{dzrk1o=&59^4lhno>`^Xi&t@)_phV`PY}`c!K(T=+c7&Aj
+zP>lOSS!~ZSkkSgZOUs=GB;%N3Z78-Ub!%ktOy=9Dj7kQ@j4wwXQ|z^VtX{#n4L~DH
+zQ!E>M6x9cEg$zWQxX*%UHK-9qZ`l9%JADf<03ceVilL=Sp8x;=07*qoM6N<$f`x(a
+A`~Uy|
+
+literal 0
+HcmV?d00001
+
+diff --git a/packages/SystemUI/res/drawable-mdpi/connect_no.png b/packages/SystemUI/res/drawable-mdpi/connect_no.png
+new file mode 100755
+index 0000000000000000000000000000000000000000..6f56da11d07c234d57f6bd5d8928c873c7eb2cf5
+GIT binary patch
+literal 373
+zcmV-*0gC>KP)<h;3K|Lk000e1NJLTq000vJ000>X1^@s6)5{gA0000PbVXQnQ*UN;
+zcVTj606}DLVr3vnZDD6+Qe|Oed2z{QJOBUz7fD1xRCwC#l|2fCFc5_&y8a-Dm9@99
+z@eqQg2ecHtfnX!vMg;K(%<>i@7I71IEw<RH!Vq8Hyw51(oYP%p(2e!GVh^27Wm!st
+z-L{REWuZLJnYLIMhSL5tP1N`OHD`|F(7LXaBndnAo2KEzFkH(FLPrN*0YEkw=@tNn
+zVUX*(I|!_UAUGFO5sRXTeBa;2Ez6>Lp5<aHVj}#m>o_uu<CvW~(;?Qj?aTc*j#O0@
+zPt%l10jP-8b<HuJ7!g$z1(!Ng5%WBcOw-)g*bf6zF%_|6MsOsqkW>uT@vw>*%C_zI
+z@7eL>cf`a&S~md1kcS}l@h1qx5Uv<o<b(V~j-sy=J0q558Pjpb{y&t<^%P(LTr{GU
+T2vAGo00000NkvXXu0mjfv_hdN
+
+literal 0
+HcmV?d00001
+
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/StatusBarPolicy.java b/packages/SystemUI/src/com/android/systemui/statusbar/StatusBarPolicy.java
+index 8c0fecf..e6e9c43 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/StatusBarPolicy.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/StatusBarPolicy.java
+@@ -40,11 +40,14 @@ import android.net.ConnectivityManager;
+ import android.net.NetworkInfo;
+ import android.net.Uri;
+ import android.net.wifi.WifiManager;
++import android.net.ethernet.EthernetManager;
++import android.net.ethernet.EthernetStateTracker;
+ import android.os.Binder;
+ import android.os.Handler;
+ import android.os.Message;
+ import android.os.RemoteException;
+ import android.os.storage.StorageManager;
++import android.os.SystemProperties;
+ import android.provider.Settings;
+ import android.telephony.PhoneStateListener;
+ import android.telephony.ServiceState;
+@@ -498,6 +501,13 @@ public class StatusBarPolicy {
+     private int mLastWifiSignalLevel = -1;
+     private boolean mIsWifiConnected = false;
+ 
++    //Ethernet
++    private static final int[] sEthImages = {
++            R.drawable.connect_established,
++            R.drawable.connect_no,
++            R.drawable.connect_creating
++        };
++
+     //4G
+     private static final int[][] sWimaxSignalImages = {
+             { R.drawable.stat_sys_data_wimax_signal_0,
+@@ -554,6 +564,8 @@ public class StatusBarPolicy {
+                     action.equals(WifiManager.WIFI_STATE_CHANGED_ACTION) ||
+                     action.equals(WifiManager.RSSI_CHANGED_ACTION)) {
+                 updateWifi(intent);
++            }  else if (action.equals(EthernetManager.ETHERNET_STATE_CHANGED_ACTION)) {
++                updateEth(intent);
+             }
+             else if (action.equals(LocationManager.GPS_ENABLED_CHANGE_ACTION) ||
+                     action.equals(LocationManager.GPS_FIX_CHANGE_ACTION)) {
+@@ -600,6 +612,7 @@ public class StatusBarPolicy {
+         mPhone = (TelephonyManager)context.getSystemService(Context.TELEPHONY_SERVICE);
+         mPhoneSignalIconId = R.drawable.stat_sys_signal_null;
+         mService.setIcon("phone_signal", mPhoneSignalIconId, 0);
++        mService.setIconVisibility("phone_signal", false);
+ 
+         // register for phone state notifications.
+         ((TelephonyManager)mContext.getSystemService(Context.TELEPHONY_SERVICE))
+@@ -619,6 +632,10 @@ public class StatusBarPolicy {
+         mService.setIconVisibility("wifi", false);
+         // wifi will get updated by the sticky intents
+ 
++        // ethernet
++        mService.setIcon("ethernet", sEthImages[0], 0);
++        mService.setIconVisibility("ethernet", false);
++
+         // wimax
+         //enable/disable wimax depending on the value in config.xml
+         boolean isWimaxEnabled = mContext.getResources().getBoolean(
+@@ -687,6 +704,7 @@ public class StatusBarPolicy {
+         filter.addAction(WifiManager.SUPPLICANT_CONNECTION_CHANGE_ACTION);
+         filter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
+         filter.addAction(WifiManager.RSSI_CHANGED_ACTION);
++        filter.addAction(EthernetManager.ETHERNET_STATE_CHANGED_ACTION);
+         filter.addAction(LocationManager.GPS_ENABLED_CHANGE_ACTION);
+         filter.addAction(LocationManager.GPS_FIX_CHANGE_ACTION);
+         filter.addAction(TelephonyIntents.ACTION_SIM_STATE_CHANGED);
+@@ -938,6 +956,17 @@ public class StatusBarPolicy {
+             }
+             updateSignalStrength(); // apply any change in mInetCondition
+             break;
++        case ConnectivityManager.TYPE_ETHERNET:
++            if (info.isConnected()) {
++                mService.setIcon("ethernet", sEthImages[0], 0);
++                // Show the icon since ethernet is connected
++                mService.setIconVisibility("ethernet", true);
++            } else {
++                mService.setIcon("ethernet", sEthImages[1], 0);
++                // Hide the icon since we're not connected
++                mService.setIconVisibility("ethernet", false);
++            }
++            break;
+         case ConnectivityManager.TYPE_WIMAX:
+             mInetCondition = inetCondition;
+             if (info.isConnected()) {
+@@ -1046,6 +1075,10 @@ public class StatusBarPolicy {
+         int iconLevel = -1;
+         int[] iconList;
+ 
++        if (!hasService())
++        {
++                return;
++        }
+         // Display signal strength while in "emergency calls only" mode
+         if (mServiceState == null || (!hasService() && !mServiceState.isEmergencyOnly())) {
+             //Slog.d(TAG, "updateSignalStrength: no service");
+@@ -1293,6 +1326,27 @@ public class StatusBarPolicy {
+         mService.setIconVisibility("bluetooth", mBluetoothEnabled);
+     }
+ 
++
++    private final void updateEth(Intent intent) {
++        final int event = intent.getIntExtra(EthernetManager.EXTRA_ETHERNET_STATE, EthernetManager.ETHERNET_STATE_UNKNOWN);
++        int iconId;
++        switch (event) {
++            case EthernetStateTracker.EVENT_HW_CONNECTED:
++            case EthernetStateTracker.EVENT_INTERFACE_CONFIGURATION_SUCCEEDED:
++                mService.setIconVisibility("ethernet", true);
++                iconId = sEthImages[0];
++                break;
++            case EthernetStateTracker.EVENT_HW_DISCONNECTED:
++            case EthernetStateTracker.EVENT_INTERFACE_CONFIGURATION_FAILED:
++                mService.setIconVisibility("ethernet", false);
++                iconId = sEthImages[1];
++                return;
++            default:
++                iconId = sEthImages[2];
++        }
++        mService.setIcon("ethernet", iconId, 0);
++    }
++
+     private final void updateWifi(Intent intent) {
+         final String action = intent.getAction();
+         if (action.equals(WifiManager.WIFI_STATE_CHANGED_ACTION)) {
+diff --git a/services/java/com/android/server/ConnectivityService.java b/services/java/com/android/server/ConnectivityService.java
+index 555975f..9c07a1b 100644
+--- a/services/java/com/android/server/ConnectivityService.java
++++ b/services/java/com/android/server/ConnectivityService.java
+@@ -32,6 +32,7 @@ import android.net.NetworkInfo;
+ import android.net.NetworkStateTracker;
+ import android.net.NetworkUtils;
+ import android.net.wifi.WifiStateTracker;
++import android.net.ethernet.EthernetStateTracker;
+ import android.net.wimax.WimaxManagerConstants;
+ import android.os.Binder;
+ import android.os.Handler;
+@@ -313,7 +314,7 @@ public class ConnectivityService extends IConnectivityManager.Stub {
+                             n.mType);
+                     continue;
+                 }
+-                if (mRadioAttributes[n.mRadio] == null) {
++                if ((n.mType != ConnectivityManager.TYPE_ETHERNET) && (mRadioAttributes[n.mRadio] == null)) {
+                     Slog.e(TAG, "Error in networkAttributes - ignoring attempt to use undefined " +
+                             "radio " + n.mRadio + " in network type " + n.mType);
+                     continue;
+@@ -321,6 +322,7 @@ public class ConnectivityService extends IConnectivityManager.Stub {
+                 mNetAttributes[n.mType] = n;
+                 mNetworksDefined++;
+             } catch(Exception e) {
++                Slog.e(TAG, "wrong dev exception " + e);
+                 // ignore it - leave the entry null
+             }
+         }
+@@ -377,7 +379,6 @@ public class ConnectivityService extends IConnectivityManager.Stub {
+                 wifiService.startWifi();
+                 mNetTrackers[ConnectivityManager.TYPE_WIFI] = wst;
+                 wst.startMonitoring();
+-
+                 break;
+             case ConnectivityManager.TYPE_MOBILE:
+                 mNetTrackers[netType] = new MobileDataStateTracker(context, mHandler,
+@@ -399,9 +400,23 @@ public class ConnectivityService extends IConnectivityManager.Stub {
+                     mNetTrackers[netType].teardown();
+                 }
+                 break;
++
+             default:
+-                Slog.e(TAG, "Trying to create a DataStateTracker for an unknown radio type " +
+-                        mNetAttributes[netType].mRadio);
++                /*
++                 * The ethernet is not a radio device, but we will still need to init
++                 * it. check if this is the etherent device or not.
++                 */
++                if (netType == ConnectivityManager.TYPE_ETHERNET) {
++                    Slog.v(TAG, "Starting Ethernet Service.");
++                    EthernetStateTracker est = new EthernetStateTracker(context, mHandler);
++                    EthernetService ethService = new EthernetService(context, est);
++                    ServiceManager.addService(Context.ETHERNET_SERVICE, ethService);
++                    mNetTrackers[ConnectivityManager.TYPE_ETHERNET] = est;
++                    est.startMonitoring();
++                } else {
++                    Slog.e(TAG, "Trying to create a DataStateTracker for an unknown radio type " +
++                    mNetAttributes[netType].mRadio);
++                }
+                 continue;
+             }
+         }
+@@ -1576,6 +1591,10 @@ public class ConnectivityService extends IConnectivityManager.Stub {
+                     // subsequent notifications when on default cellular because it never
+                     // disconnects..  so only do this to wifi notifications.  Fixed better when the
+                     // APN notifications are standardized.
++                    if (mNetAttributes[type] == null) {
++                        Slog.d(TAG, "No network attributes for type " + type);
++                        return;
++                    }
+                     if (mNetAttributes[type].mLastState == state &&
+                             mNetAttributes[type].mRadio == ConnectivityManager.TYPE_WIFI) {
+                         if (DBG) {
+@@ -1637,6 +1656,10 @@ public class ConnectivityService extends IConnectivityManager.Stub {
+ 
+                 case NetworkStateTracker.EVENT_CONFIGURATION_CHANGED:
+                     info = (NetworkInfo) msg.obj;
++                    if (info == null) {
++                        Slog.d(TAG, "No network info for EVENT_CONFIGURATION_CHANGED ");
++                        return;
++                    }
+                     type = info.getType();
+                     handleDnsConfigurationChange(type);
+                     break;
+diff --git a/services/java/com/android/server/EthernetService.java b/services/java/com/android/server/EthernetService.java
+new file mode 100644
+index 0000000..defc6b5
+--- /dev/null
++++ b/services/java/com/android/server/EthernetService.java
+@@ -0,0 +1,212 @@
++/*
++ * Copyright (C) 2010 The Android-x86 Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ * Author: Yi Sun <beyounn@gmail.com>
++ */
++
++package com.android.server;
++
++import java.net.UnknownHostException;
++import android.net.ethernet.EthernetNative;
++import android.net.ethernet.IEthernetManager;
++import android.net.ethernet.EthernetManager;
++import android.net.ethernet.EthernetStateTracker;
++import android.net.ethernet.EthernetDevInfo;
++import android.provider.Settings;
++import android.util.Slog;
++import android.content.BroadcastReceiver;
++import android.content.ContentResolver;
++import android.content.Context;
++import android.content.Intent;
++import android.content.IntentFilter;
++
++/**
++ * WifiService handles remote Ethernet operation requests by implementing
++ * the IEthernetManager interface. It also creates a EtherentMonitor to listen
++ * for Etherent-related events.
++ *
++ * @hide
++ */
++public class EthernetService<syncronized> extends IEthernetManager.Stub {
++    private static final String TAG = "EthernetService";
++    private static final int ETHERNET_HAS_CONFIG = 1;
++    private static final boolean localLOGV = true;
++
++    private int mEthState= EthernetManager.ETHERNET_STATE_UNKNOWN;
++    private Context mContext;
++    private EthernetStateTracker mTracker;
++    private String[] DevName;
++    private int isEnabled ;
++
++    public EthernetService(Context context, EthernetStateTracker Tracker) {
++        mTracker = Tracker;
++        mContext = context;
++
++        isEnabled = getPersistedState();
++        if (localLOGV == true) Slog.i(TAG, "Ethernet dev enabled " + isEnabled);
++        getDeviceNameList();
++        setState(isEnabled);
++        mTracker.StartPolling();
++    }
++
++    /**
++     * check if the ethernet service has been configured.
++     * @return {@code true} if configured {@code false} otherwise
++     */
++    public boolean isConfigured() {
++        final ContentResolver cr = mContext.getContentResolver();
++        return (Settings.Secure.getInt(cr, Settings.Secure.ETHERNET_CONF, 0) == ETHERNET_HAS_CONFIG);
++
++    }
++
++    /**
++     * Return the saved ethernet configuration
++     * @return ethernet interface configuration on success, {@code null} on failure
++     */
++    public synchronized EthernetDevInfo getSavedConfig() {
++        if (!isConfigured())
++            return null;
++
++        final ContentResolver cr = mContext.getContentResolver();
++        EthernetDevInfo info = new EthernetDevInfo();
++        info.setConnectMode(Settings.Secure.getString(cr, Settings.Secure.ETHERNET_MODE));
++        info.setIfName(Settings.Secure.getString(cr, Settings.Secure.ETHERNET_IFNAME));
++        info.setIpAddress(Settings.Secure.getString(cr, Settings.Secure.ETHERNET_IP));
++        info.setDnsAddr(Settings.Secure.getString(cr, Settings.Secure.ETHERNET_DNS));
++        info.setNetMask(Settings.Secure.getString(cr, Settings.Secure.ETHERNET_MASK));
++        info.setRouteAddr(Settings.Secure.getString(cr, Settings.Secure.ETHERNET_ROUTE));
++
++        return info;
++    }
++
++    /**
++     * Set the ethernet interface configuration mode
++     * @param mode {@code ETHERNET_CONN_MODE_DHCP} for dhcp {@code ETHERNET_CONN_MODE_MANUAL} for manual configure
++     */
++    public synchronized void setMode(String mode) {
++        final ContentResolver cr = mContext.getContentResolver();
++        if (DevName != null) {
++            Settings.Secure.putString(cr, Settings.Secure.ETHERNET_IFNAME, DevName[0]);
++            Settings.Secure.putInt(cr, Settings.Secure.ETHERNET_CONF, 1);
++            Settings.Secure.putString(cr, Settings.Secure.ETHERNET_MODE, mode);
++        }
++    }
++
++    /**
++     * update a ethernet interface information
++     * @param info  the interface infomation
++     */
++    public synchronized void updateDevInfo(EthernetDevInfo info) {
++        final ContentResolver cr = mContext.getContentResolver();
++        Settings.Secure.putInt(cr, Settings.Secure.ETHERNET_CONF, 1);
++        Settings.Secure.putString(cr, Settings.Secure.ETHERNET_IFNAME, info.getIfName());
++        Settings.Secure.putString(cr, Settings.Secure.ETHERNET_IP, info.getIpAddress());
++        Settings.Secure.putString(cr, Settings.Secure.ETHERNET_MODE, info.getConnectMode());
++        Settings.Secure.putString(cr, Settings.Secure.ETHERNET_DNS, info.getDnsAddr());
++        Settings.Secure.putString(cr, Settings.Secure.ETHERNET_ROUTE, info.getRouteAddr());
++        Settings.Secure.putString(cr, Settings.Secure.ETHERNET_MASK, info.getNetMask());
++        if (mEthState == EthernetManager.ETHERNET_STATE_ENABLED) {
++            try {
++                mTracker.resetInterface();
++            } catch (UnknownHostException e) {
++                Slog.e(TAG, "Wrong ethernet configuration");
++            }
++        }
++    }
++
++    /**
++     * get the number of ethernet interfaces in the system
++     * @return the number of ethernet interfaces
++     */
++    public int getTotalInterface() {
++        return EthernetNative.getInterfaceCnt();
++    }
++
++
++    private int scanDevice() {
++        int i, j;
++        if ((i = EthernetNative.getInterfaceCnt()) == 0)
++            return 0;
++
++        DevName = new String[i];
++
++        for (j = 0; j < i; j++) {
++            DevName[j] = EthernetNative.getInterfaceName(j);
++            if (DevName[j] == null)
++                break;
++            if (localLOGV) Slog.v(TAG, "device " + j + " name " + DevName[j]);
++        }
++
++        return i;
++    }
++
++    /**
++     * get all the ethernet device names
++     * @return interface name list on success, {@code null} on failure
++     */
++    public String[] getDeviceNameList() {
++        return (scanDevice() > 0) ? DevName : null;
++    }
++
++    private int getPersistedState() {
++        final ContentResolver cr = mContext.getContentResolver();
++        try {
++            return Settings.Secure.getInt(cr, Settings.Secure.ETHERNET_ON);
++        } catch (Settings.SettingNotFoundException e) {
++            return EthernetManager.ETHERNET_STATE_UNKNOWN;
++        }
++    }
++
++    private synchronized void persistEnabled(boolean enabled) {
++        final ContentResolver cr = mContext.getContentResolver();
++        Settings.Secure.putInt(cr, Settings.Secure.ETHERNET_ON, enabled ? EthernetManager.ETHERNET_STATE_ENABLED : EthernetManager.ETHERNET_STATE_DISABLED);
++    }
++
++    /**
++     * Enable or Disable a ethernet service
++     * @param enable {@code true} to enable, {@code false} to disable
++     */
++    public synchronized void setState(int state) {
++
++        if (mEthState != state) {
++            mEthState = state;
++            if (state == EthernetManager.ETHERNET_STATE_DISABLED) {
++                persistEnabled(false);
++                mTracker.stopInterface(false);
++            } else {
++                persistEnabled(true);
++                if (!isConfigured()) {
++                    // If user did not configure any interfaces yet, pick the first one
++                    // and enable it.
++                    setMode(EthernetDevInfo.ETHERNET_CONN_MODE_DHCP);
++                }
++                try {
++                    mTracker.resetInterface();
++                } catch (UnknownHostException e) {
++                    Slog.e(TAG, "Wrong ethernet configuration");
++                }
++            }
++        }
++    }
++
++    /**
++     * Get ethernet service state
++     * @return the state of the ethernet service
++     */
++    public int getState( ) {
++        return mEthState;
++    }
++
++}
+-- 
+1.7.1
+

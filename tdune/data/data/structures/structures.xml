@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<Structures>
+    <Structure>	
+	<id>0</id>
+	<objectid>0</objectid>
+	<name>Command Center</name>
+	<width>2</width>
+	<height>2</height>
+	<graphic>base.png</graphic>
+	<energy>
+	    <input>0</input>
+	    <output>30</output>
+	</energy>
+	<costs>
+	    <resource-1>0</resource-1>
+	    <resource-2>0</resource-2>
+	    <resource-3>0</resource-3>
+	    <resource-4>0</resource-4>
+	    <resource-5>0</resource-5>
+	</costs>
+	<produce>
+	    <structure-1>1</structure-1>	
+	    <structure-2>2</structure-2>	
+	    <structure-3>3</structure-3>	
+	    <structure-4>4</structure-4>	
+	    <structure-5>5</structure-5>	
+	    <structure-6>6</structure-6>	
+	    <entity-1>1</entity-1>
+	    <entity-2>2</entity-2>
+	    <entity-3>2</entity-3>
+	    <entity-4>4</entity-4>
+	    <entity-5>5</entity-5>
+	</produce>
+	<hitpoints>1000</hitpoints>
+	<upgradable>1</upgradable>
+    </Structure>	
+</Structures>

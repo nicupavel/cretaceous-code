@@ -1,0 +1,108 @@
+
+
+<script language="JavaScript1.2">
+	
+	//on the fly email check	
+	//Remember to make a table in db to get this banned mail addreses
+	
+	var invalidaddress=new Array()
+	invalidaddress[0]="hotmail"
+	invalidaddress[1]="microsoft"
+	invalidaddress[2]="dbuleu"
+	
+        var testresults
+
+
+	
+	function checkemail(str){
+	
+		
+		var invalidcheck=0;
+				
+		var filter=/^.+@.+\..{2,3}$/
+		
+		if (filter.test(str)){
+			var tempstring=str.split("@")
+			tempstring=tempstring[1].split(".")
+			for (i=0;i<invalidaddress.length;i++){
+				if (tempstring[0]==invalidaddress[i])
+					invalidcheck=1
+				}
+				if (invalidcheck!=1)
+					testresults=true
+				else{
+					alert("This email address is banned !")
+					testresults=false
+				}
+				}
+			else{
+				alert("Please input a valid email address!")
+			testresults=false
+			}
+	return (testresults)
+	}
+
+</script>
+
+<script>
+	function check_browser(){
+		if (document.layers||document.all)
+		return (checkemail(document.validation.from.value)&&checkemail(document.validation.to.value))
+		else
+		return true
+	}
+</script>
+
+
+<table border=0 cellspacing=0 cellpading=0 align=center width=100% height=100%>
+<tr>
+ <td align=center valign=middle>
+
+<form action=index.cgi method=post name=validation onSubmit="return check_browser()">
+<table border=0 cellspacing=0 cellpading=0 align=center>
+<tr>
+    <td bgcolor=#003366 align=center><font class=bartext> You have selected: </font>
+    </td>
+
+</tr>
+
+
+<!!img!!>
+
+<tr>
+    <td bgcolor=#003366 align=center>
+	<table border=0 cellspacing=0 cellpading=0>
+	 <tr>
+	    <td bgcolor=#9097c8>To:</td>
+	    <td bgcolor=#9097c><input type=text  name=to size=51>&nbsp;<BR></td>
+	</tr>
+	<tr>
+	    <td bgcolor=#9097c8>From:</td>
+	    <td bgcolor=#9097c><input type=text name=from size=51></td>
+	</tr>
+	<tr>
+	    <td bgcolor=#9097c8>Your Name:</td>
+	    <td bgcolor=#9097c><input type=text name=from_name size=51></td>
+	</tr>
+	<tr>
+	    <td bgcolor=#9097c8>Text:</td>
+	    <td bgcolor=#9097c><textarea name=body cols=50 rows=10 wrap></textarea></td>
+	</tr>
+	</table>	
+    </td>
+
+</tr>
+
+<tr>
+    <td bgcolor=#003366 align=center>
+	<font class=bartext><input type=submit value="Done"  name=action>&nbsp;<input type=reset value="Reset"></font>
+    </td>
+
+</tr>
+
+</table>
+<input type=hidden name=id value=<!!ecard!!> > <input type = hidden name=category value =<!!category_name!!> >
+</form>
+</td>
+</tr>
+</table>

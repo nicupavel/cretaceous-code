@@ -1,0 +1,26 @@
+#!/bin/bash
+
+PackageRoot=`dirname "$0"`
+if [ "." == "$PackageRoot" ] ; then
+  PackageRoot="$PWD"
+fi
+PackageName=`basename "$PackageRoot"`
+PackageInput="$PackageRoot/content"
+PackageOutput="/imedia/built-packages/"
+PackageInstaller="install"
+PackageDescription="Sample Package"
+PackageLSM="$PackageRoot/$PackageName.lsm"
+KernelVer=`ls -al /lib/modules/imedia-modules-* | tail -1 | awk '{print $11}' | cut -f 4 -d / | cut -d "-" -f 1`-imedia
+
+CurrentDir="$PWD"
+rm -rf "$PackageInput"
+rm -rf "$PackageOutput/$PackageName"
+mkdir -p "$PackageInput"
+chown root:root "$PackageInput"
+mkdir -p "$PackageOutput"
+chown root:root "$PackageOutput"
+
+cp "$PackageRoot/$PackageInstaller" "$PackageInput"
+chown root:root "$PackageInput/$PackageInstaller"
+cd "$PackageInput"
+

@@ -1,0 +1,23 @@
+function rtsp_allow ()
+{
+
+	for i in $RTSP_ALLOW; do
+		for j in $RTSP_ALLOW_TCP_PORTS; do
+			iptables -A FORWARD -p tcp --sport $UNPRIVPORTS -d $i \
+			 	--dport $j -m state --state NEW -j ACCEPT
+		done
+		
+		for k in $RTSP_ALLOW_UDP_PORTS; do
+			iptables -A FORWARD -p udp --sport $UNPRIVPORTS -d $i \
+				--dport $k -j ACCEPT
+		done
+
+	done
+		
+	echo "rtsp"
+}
+
+function MODULE_EXPORT ()
+{
+	rtsp_allow
+}

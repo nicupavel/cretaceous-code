@@ -1,0 +1,24 @@
+#!/bin/bash
+
+cd "$CurrentDir"
+
+# Create LSM for package before make the actual patch
+
+echo "Creating LSM $PackageLSM"
+
+# Output LSM template
+echo -e \
+"Name		: $PackageName
+Version		: $PackageVersion
+Arch		: $PackageArch
+Vendor		: Ituner Networks Corporation
+Category	: $PackageCategory
+Target systems	: $PackageTarget
+Description	: $PackageDescription
+Details		: $PackageDetails" \
+> $PackageLSM
+
+PackageExt="imp"
+# Create actual patch including LSM
+
+/imedia/packages/mediapck --lsm "$PackageLSM" "$PackageInput" "$PackageOutput/$PackageName.$PackageVersion.$PackageTarget.$PackageArch.$PackageExt" "$PackageName.$PackageArch-package" "$PackageDescription" "./$PackageInstaller"

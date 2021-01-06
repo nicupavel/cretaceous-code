@@ -1,0 +1,37 @@
+function initialize ()
+{
+	# requests to remote servers from our ns
+
+	iptables -A FORWARD -p udp -s $NAMESERVER_1  \
+		 --dport 53 -j ACCEPT
+	
+	iptables -A FORWARD -p tcp -s $NAMESERVER_1  \
+		 --dport 53 -j ACCEPT
+
+	iptables -A FORWARD -p udp -s $NAMESERVER_2  \
+		 --dport 53 -j ACCEPT
+	
+	iptables -A FORWARD -p tcp -s $NAMESERVER_2  \
+		 --dport 53 -j ACCEPT
+
+	# requests from remote clients to our ns
+	
+	iptables -A FORWARD -p udp  -d $NAMESERVER_1 \
+		 --dport 53 -j ACCEPT
+
+	iptables -A FORWARD -p tcp  -d $NAMESERVER_1 \
+		 --dport 53 -j ACCEPT
+
+	iptables -A FORWARD -p udp -d $NAMESERVER_2 \
+		 --dport 53 -j ACCEPT
+
+	iptables -A FORWARD -p tcp  -d $NAMESERVER_2 \
+		 --dport 53 -j ACCEPT
+
+	echo "dns"
+}
+
+function MODULE_EXPORT ()
+{
+	initialize
+}

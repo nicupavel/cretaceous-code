@@ -1,0 +1,16 @@
+function sshd_allow ()
+{
+
+	for i in $SSHD_ALLOW; do
+	
+		iptables -A FORWARD -p tcp --sport $UNPRIVPORTS -d $i \
+			 --dport 22 -m state --state NEW -j ACCEPT
+	done
+		
+	echo "sshd"
+}
+
+function MODULE_EXPORT ()
+{
+	sshd_allow
+}

@@ -1,0 +1,308 @@
+#!/usr/bin/perl
+#-----------------------------------------------------------------------------
+# Debugging and code safe-quard support
+#-----------------------------------------------------------------------------
+# !!! FOR USING IN A PRODUCTION ENVIRONMENT COMMENT THE FOLLOWING 3 LINES !!!
+# !!! AND UNCOMMENT THE NEXT 2 !!!
+#-----------------------------------------------------------------------------
+#use warnings;
+#use strict;
+#use diagnostics;
+
+no  warnings;
+no  strict;
+use lib "/mediabox/webadmin/web-control/cgi-bin/libs";
+
+require "utils.pm";
+
+my  $DEBUG = 1;
+
+#-----------------------------------------------------------------------------
+# Library includes
+#-----------------------------------------------------------------------------
+use Time::Local;
+
+#-----------------------------------------------------------------------------
+# Global constants
+#-----------------------------------------------------------------------------
+my $CRON_DIR 			= "/mediabox/webadmin/job-control";
+my $CRON_BIN_DIR 		= "$CRON_DIR/bin";
+my $CRON_MODULES_DIR 		= "$CRON_DIR/modules";
+my $STARTED_MODULES_FILE	= "started.conf";
+
+my $MODULE_NAME;	# It will be set within 'main()' subrutine
+my $MODULE_CMD;		# It will be set within 'main()' subrutine
+
+my $STATUS_FILE; 	# It will be set within 'main()' subrutine
+my $LOCK_FILE;	 	# It will be set within 'main()' subrutine
+my $STDOUT_FILE; 	# It will be set within 'main()' subrutine
+my $PARAMS_FILE; 	# It will be set within 'main()' subrutine
+
+my $WATCHDOG;		# It will be set within 'main()' subrutine
+
+my $MAX_MESSAGES_COUNT = 5;		# Maximum number of messages on STATUS_FILE
+my $MESSAGES_COUNT = $MAX_MESSAGES_COUNT;
+
+my %params = ();
+
+#-----------------------------------------------------------------------------
+# Utility functions
+#-----------------------------------------------------------------------------
+sub TouchFile($) 
+{
+    my $FilePath = shift;
+    
+    open(TOUCH, "> $FilePath"); 
+    close(TOUCH);
+}
+
+#-----------------------------------------------------------------------------
+sub StatusFileMessage($)
+{
+    my $Message = shift;
+    
+    if ( $MESSAGES_COUNT != 0 ) {
+	open(STATUS, ">> $STATUS_FILE");
+    }
+    else {
+	open(STATUS, "> $STATUS_FILE");
+	$MESSAGES_COUNT = $MAX_MESSAGES_COUNT;
+    }
+
+    my $DateStamp = scalar(localtime(time));
+    $DateStamp =~ s/\s/-/g;
+
+    print STATUS "$DateStamp: $Message";
+    $MESSAGES_COUNT--;
+    close(STATUS);
+}
+#-----------------------------------------------------------------------------
+sub StartModule($$) 
+{
+    my $ModuleName    = shift;
+    my $ModuleCommand = shift;
+    
+    $ENV{'MediaBoxModuleName'} = $ModuleName;
+    
+    system("/usr/bin/sudo /bin/nice $ModuleCommand  > "."\"$STDOUT_FILE\" &");
+    
+    my $Rez = $?;	
+    
+    return $Rez;
+}
+#-----------------------------------------------------------------------------
+sub WaitForModuleClose($$)
+{
+    my ($ModuleName,$WatchDog) = @_;
+    my $ThereAreChildren;
+    my $module;
+    
+    if (!$WatchDog) { $WatchDog = 30; }
+    if ($WatchDog < 5) { $WatchDog = 5; }
+
+do {
+    $ThereAreChildren = 0;
+    
+    $ENV{'MediaBoxModuleName'} = "pidwatcher";
+    
+    open(CHILDREN,"$CRON_BIN_DIR/pspidwatcher |");
+	
+    while (<CHILDREN>) {
+    	chomp();
+	/MediaBoxModuleName=($ModuleName).*$/g;
+	$module = $1;
+	if ($module eq $ModuleName) {
+	    print "Found Module: $module\n" if $DEBUG;
+	    $ThereAreChildren = 1;
+	    last;
+	}
+    }
+	
+    close(CHILDREN);
+    sleep ($WatchDog);
+}
+while ($ThereAreChildren);
+    
+}
+#-----------------------------------------------------------------------------
+# 'main()' subroutine
+#-----------------------------------------------------------------------------
+
+#-----------------------------------------------------------------------------
+# Get the 'MODULE_NAME'
+#-----------------------------------------------------------------------------
+$MODULE_NAME = $ARGV[0];
+
+if (!$MODULE_NAME) { 
+    print "startmodule: missing <module_name> argument. Aborting\n"; 
+    exit(1);
+}
+
+print "MODULE_NAME = $MODULE_NAME\n" if $DEBUG;
+
+if ($ARGV[1] && $ARGV[2]) {
+    print "Found arguments on command line\n" if $DEBUG;
+    %params = MakeParamsFromArgv(\@ARGV);
+    if ($params{module_command}  && $params{module_watchdog}) {
+        # Now write the params file to be able to start the module back in case of a failure
+	MakeParamsFile(\%params);
+    } else {
+	print "Cannot build module parameters from commandline. Aborting.\n";
+        exit(1);
+    }
+} else {
+    %params = ReadParamsFile($MODULE_NAME);
+    if ( !$params{module_command} || !$params{module_watchdog}) {
+        print "Cannot build module parameters to start module. Aborting.\n";
+        exit(1);
+    }
+}
+ 
+#-----------------------------------------------------------------------------
+# Set the special file paths for module tracking
+#-----------------------------------------------------------------------------
+$STATUS_FILE	= "$CRON_MODULES_DIR/$MODULE_NAME.status";
+$LOCK_FILE	= "$CRON_MODULES_DIR/$MODULE_NAME.lock";
+$STDOUT_FILE	= "$CRON_MODULES_DIR/$MODULE_NAME.stdout";
+
+#-----------------------------------------------------------------------------
+# Update the '$CRON_MODULES_DIR/STARTED_MODULES_FILE'
+#-----------------------------------------------------------------------------
+my $StartedModulesFileTemp = $STARTED_MODULES_FILE . "." . time();
+
+if (open(STARTED_MODULES_TEMP, "> /tmp/$StartedModulesFileTemp")) {
+    if (open(STARTED_MODULES, "< $CRON_MODULES_DIR/$STARTED_MODULES_FILE")) {
+	while (<STARTED_MODULES>) {
+	    chomp();
+	
+	    if ($_ ne $MODULE_NAME) {
+		print STARTED_MODULES_TEMP "$_\n";
+	    }
+	}
+	close(STARTED_MODULES);
+    }
+    print STARTED_MODULES_TEMP "$MODULE_NAME\n";	    
+    close(STARTED_MODULES_TEMP);
+    
+    system("mv -f \"/tmp/$StartedModulesFileTemp\" " .
+	"\"$CRON_MODULES_DIR/$STARTED_MODULES_FILE\"");
+}
+
+#-----------------------------------------------------------------------------
+# Get the 'WATCHDOG', and 'MODULE_CMD'
+#-----------------------------------------------------------------------------
+$WATCHDOG = $params{module_watchdog};
+print "WATCHDOG = $WATCHDOG\n" if $DEBUG;
+
+$MODULE_CMD = $params{module_command};
+print "MODULE_CMD = $MODULE_CMD\n" if $DEBUG; 
+
+
+#-----------------------------------------------------------------------------
+# Mark the devices used by this module as USED for Webadmin.
+#-----------------------------------------------------------------------------
+for (my $i=0; $params{devices}[$i]; $i++) {
+    print "Adding device $params{devices}[$i] to used devices file.\n" if $DEBUG;
+    DeclareDeviceAsUsed($params{devices_path}[$i], $params{devices}[$i]);
+}
+
+#-----------------------------------------------------------------------------
+# Calculate the 'DATESTAMP' and 'START'
+#-----------------------------------------------------------------------------
+my $DATESTAMP = scalar(localtime(time));
+$DATESTAMP =~ s/\s/-/g;
+print "DATESTAMP: $DATESTAMP\n" if $DEBUG;
+
+my $START = time(); # seconds from the epoch
+print "START: $START\n" if $DEBUG;
+
+#-----------------------------------------------------------------------------
+# Update the 'STATUS_FILE' and 'LOCK_FILE'
+#-----------------------------------------------------------------------------
+if (-e $STATUS_FILE ) { 
+    TouchFile($STATUS_FILE);
+    print "TouchFile: Created empty '$STATUS_FILE'\n" if $DEBUG;
+}
+
+if (!-e $LOCK_FILE ) { 
+    TouchFile($LOCK_FILE);
+    print "TouchFile: Created '$LOCK_FILE'\n" if $DEBUG;
+}
+else {
+    StatusFileMessage("-:$MODULE_CMD:$START:$START:already started.\n");
+    exit(3);
+}
+
+open(LOCK, "> $LOCK_FILE");
+print LOCK "$$";
+close(LOCK);
+
+#-----------------------------------------------------------------------------
+# Module execution, with optional watchdog protection loop
+#-----------------------------------------------------------------------------
+my $DateStamp;
+
+if ($WATCHDOG) {
+    for (;;) {
+	if (StartModule($MODULE_NAME, $MODULE_CMD) == -1) { 
+	    print "startmodule: cannot start module '$MODULE_NAME' " .
+		"with command '$MODULE_CMD'\n";
+	    StatusFileMessage("cannot start module '$MODULE_NAME'");
+	    $ENV{'MediaBoxModuleName'} = "";
+	    
+	} else {
+	    StatusFileMessage("$MODULE_CMD:$START:$DateStamp: started\n");
+	}
+    
+	WaitForModuleClose($MODULE_NAME, $WATCHDOG);
+	
+	$DateStamp = scalar(localtime(time));
+	$DateStamp =~ s/\s/-/g;
+
+	StatusFileMessage("$$:$MODULE_CMD:$START:$DateStamp: terminated " .
+	    "while watchdog is enabled. Restarting it.\n");
+	
+	if ($DEBUG) {
+	    print "Module '$MODULE_NAME' terminated while watchdog is " .
+		"enabled. Restarting it.\n";
+	}
+    }
+}
+else {
+    if (StartModule($MODULE_NAME, $MODULE_CMD) == -1) { 
+	print "startmodule: cannot start module '$MODULE_NAME' " .
+	    "with command '$MODULE_CMD'\n";
+	StatusFileMessage("cannot start module '$MODULE_NAME'");
+	$ENV{'MediaBoxModuleName'} = "";
+    }
+    
+    # This is still needed because if we don't wait on a
+    # module we will lose the pid of the parent and we won't
+    # be able to kill the process from the web interface.
+    
+    $WATCHDOG = 30;
+    WaitForModuleClose($MODULE_NAME, $WATCHDOG);
+
+    $DateStamp = scalar(localtime(time));
+    $DateStamp =~ s/\s/-/g;
+
+    StatusFileMessage("$$:$MODULE_CMD:$START:$DateStamp: terminated.\n");
+	
+    if ($DEBUG) {
+        print "Module '$MODULE_NAME' terminated.\n";
+    }
+}
+
+#-----------------------------------------------------------------------------
+# Update 'STATUS_FILE' again at module termination
+#-----------------------------------------------------------------------------
+my $STOP = time;
+
+StatusFileMessage("$$:$MODULE_CMD:$START:$STOP: completed.\n");
+
+#-----------------------------------------------------------------------------
+# If module has finished his job we should call stopmodule to "stop it" and 
+# declare devices as free.
+#-----------------------------------------------------------------------------
+
+system("$CRON_BIN_DIR/stopmodule $MODULE_NAME");

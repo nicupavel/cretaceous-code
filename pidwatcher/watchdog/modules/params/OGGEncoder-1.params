@@ -1,0 +1,5 @@
+module_watchdog=30
+module_name=OGGEncoder-1
+module_command=/mediabox/webadmin/web-control/cgi-bin/wrappers/encoders/oggencoder.wrapper   --timestamp=on --server=127.0.0.1 --mountpoint=vorbis1.ogg --port=8040 --password=live2me --bitrate=64 --samplerate=22050 --audio_device=/dev/imux9 --quality=0.1 --bitratemode=vbr --name \"'Vorbis streaming'\" --buffer= --channels=1 --bitspersample=16 --config_file=  
+device=/dev/imux9
+device_path=/mediabox/webadmin/web-control/cgi-bin/values/encoders-audio-devs

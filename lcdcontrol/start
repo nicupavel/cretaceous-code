@@ -1,0 +1,9 @@
+#!/bin/bash
+
+if [ `pidof -s -x lcdcontrol` ] ; then
+    echo "LCD control client is already running"
+else
+    Dir=`dirname $0`
+    
+    "$Dir/lcdcontrol" &
+fi

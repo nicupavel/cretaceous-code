@@ -1,0 +1,95 @@
+From dbc770d448a29e577a0edec46a9b972bfda186bb Mon Sep 17 00:00:00 2001
+From: Nicu Pavel <npavel@mini-box.com>
+Date: Wed, 25 Nov 2009 14:21:38 +0200
+Subject: [PATCH 10/22] Fix memory mapping for SPARSEMEM to use both banks of memory
+
+Thanks to <Todd.Hixon@atmel.com> for the correct mappings
+---
+ arch/arm/Kconfig                         |    1 +
+ arch/arm/include/asm/memory.h            |    3 ++-
+ arch/arm/mach-at91/include/mach/memory.h |   19 +++++++++++++++++++
+ arch/arm/mm/init.c                       |    8 +++++++-
+ 4 files changed, 29 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
+index 7beba01..7468feb 100644
+--- a/arch/arm/Kconfig
++++ b/arch/arm/Kconfig
+@@ -244,6 +244,7 @@ config ARCH_AT91
+ 	select ARCH_REQUIRE_GPIOLIB
+ 	select HAVE_CLK
+ 	select ARCH_SPARSEMEM_ENABLE
++	select ARCH_SELECT_MEMORY_MODEL
+ 	help
+ 	  This enables support for systems based on the Atmel AT91RM9200,
+ 	  AT91SAM9 and AT91CAP9 processors.
+diff --git a/arch/arm/include/asm/memory.h b/arch/arm/include/asm/memory.h
+index 85763db..764b939 100644
+--- a/arch/arm/include/asm/memory.h
++++ b/arch/arm/include/asm/memory.h
+@@ -119,9 +119,10 @@
+  * private definitions which should NOT be used outside memory.h
+  * files.  Use virt_to_phys/phys_to_virt/__pa/__va instead.
+  */
++#ifndef __virt_to_phys
+ #define __virt_to_phys(x)	((x) - PAGE_OFFSET + PHYS_OFFSET)
+ #define __phys_to_virt(x)	((x) - PHYS_OFFSET + PAGE_OFFSET)
+-
++#endif
+ /*
+  * Convert a physical address to a Page Frame Number and back
+  */
+diff --git a/arch/arm/mach-at91/include/mach/memory.h b/arch/arm/mach-at91/include/mach/memory.h
+index 34d83f8..0043a26 100644
+--- a/arch/arm/mach-at91/include/mach/memory.h
++++ b/arch/arm/mach-at91/include/mach/memory.h
+@@ -24,7 +24,26 @@
+ #include <mach/hardware.h>
+ 
+ #define PHYS_OFFSET	(AT91_SDRAM_BASE)
++
++#if defined(CONFIG_ARCH_AT91SAM9G45)
++/*
++ * Non-linear mapping like so:
++ * phys       => virt
++ * 0x70000000 => 0xc0000000
++ * 0x20000000 => 0xc8000000
++ */
++
++#define __phys_to_virt(p)   \
++            (((p) & 0x07ffffff) + (((p) & 0x40000000) ? 0xc0000000 : 0xc8000000))
++
++#define __virt_to_phys(v)   \
++            (((v) & 0x07ffffff) + (((v) & 0x08000000) ? 0x20000000 : 0x70000000 ))
++
+ #define NODE_MEM_SIZE_BITS	27
+ #define MAX_PHYSMEM_BITS	32
+ #define SECTION_SIZE_BITS	27 /*128 Mb */
++#define HIGH_MEMORY_VIRT	0xd0000000
++#define MEMEND_PFN		((unsigned long)0x80000000 >> PAGE_SHIFT)
++#endif
++
+ #endif
+diff --git a/arch/arm/mm/init.c b/arch/arm/mm/init.c
+index 8277802..c112718 100644
+--- a/arch/arm/mm/init.c
++++ b/arch/arm/mm/init.c
+@@ -383,8 +383,14 @@ void __init bootmem_init(void)
+ 	for_each_node(node)
+ 		bootmem_free_node(node, mi);
+ 
++#ifdef MEMEND_PFN
++	memend_pfn = MEMEND_PFN;
++#endif
++#ifdef HIGH_MEMORY_VIRT
++	high_memory = HIGH_MEMORY_VIRT;
++#else
+ 	high_memory = __va((memend_pfn << PAGE_SHIFT) - 1) + 1;
+-
++#endif
+ 	/*
+ 	 * This doesn't seem to be used by the Linux memory manager any
+ 	 * more, but is used by ll_rw_block.  If we can get rid of it, we
+-- 
+1.6.3.3
+

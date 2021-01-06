@@ -1,0 +1,119 @@
+##############################################
+# Menu config file for Minibox general usage #
+##############################################
+
+# Format:
+# MenuName:Menu Item==xAction
+# Where x = ^ (ignored) @ (load menu) & (run function) * (run sys command) ~ (run sys command safe for saving and started at lcd init)
+
+# Special item _cancel for action to take on cancel receive
+# If system commands don't start with a /, will be assumed to exist in
+# _default:exepath
+
+# Any action can be prepended with a General Purpose Output (GPO) directive:
+# %gpo_number-[1|0]  eg:
+# Start Encoder==%1-1*encoder  (If selected, turn on gpo 1 and run 'encoder')
+# Stop Audio 2==%3-0*audio stop  (Turn off gpo 3 and run 'audio stop')
+
+# Arguments to be passed to commands/functions can be specified with their
+# requesting prompt in ><. ie. net_setup ip >System IP:< will prompt the
+# user with "System IP:" and substitute the input into the command line.
+# To specify an input type other than alphanumeric, >i:System IP:<, will
+# allow only characters valid for an ip address.
+
+# Conditional prompts/commands:
+# MenuName:{prog1?cond1}Prompt1==xAction1??{prog1?cond2}Prompt2==xAction2??Prompt3==xAction3
+# Explanation:
+# Run prog1 and compare output with condition cond1, if it matches, show Prompt1 which would
+# execute xAction1 if selected. Failing a match on prog/cond1, run prog1 and compare to cond2,
+# if it matches... Failing that, Prompt/Action3 has no condition, this is the fallback default.
+
+# Complex Example:
+# Testing:{apachectl status?==1}Stop WebServer==%3-0*apachectl stop??{apachectl status?>1}Kill WebServer==%3-0*apachectl kill??Start WebServer==%3-1*apachectl start
+
+# Variable manipulations:
+# It's possible to set/display internal variables using this format anywhere
+# the command arguments:
+# Testing:{prog status?==1}Program Off($stat$)==%3-0*prog stop+stat=1+??{prog status?>1}Program Kill==%3-0*prog kill??Program On($stat$)==%3-1*prog start+stat=0+
+#
+# Explanation - $stat$ will be substituted with the value of 'stat'.
+#               +stat=1+ sets the value of 'stat' to 1.
+# Substitions can appear anywhere in command line (Label or action)
+# Setting can be listed anywhere in action component, but start or end makes sense.
+
+###############################################################################
+
+_default:exepath==/opt/lcd/client/
+_default:f1==*/mediabox/webadmin/web-control/cgi-bin/lcdkeysaction.pl f1
+_default:f2==*/mediabox/webadmin/web-control/cgi-bin/lcdkeysaction.pl f2
+_default:f3==*/mediabox/webadmin/web-control/cgi-bin/lcdkeysaction.pl f3
+
+Main:_cancel==^nop
+Main:System Status==@Status
+Main:System Maintenance==@Maintenance
+Main:Log Files==@Logs
+Main:Network Setup==@Network
+Main:Sound Options==@Sound
+Main:GPO Functions==@GPO
+Main:LCD Functions==@LCD
+Main:Toggle Backlight==&backlight(99)
+
+Maintenance:_cancel==@Main
+Maintenance:Sync Drives==*/bin/sync
+Maintenance:Reboot==*/sbin/reboot
+Maintenance:PowerOff==*/sbin/poweroff
+
+Status:_cancel==@Main
+Status:VU Meter==~lcdstats V
+Status:Fans/Temperature==~lcdstats N
+Status:Processor==~lcdstats C
+Status:Memory==~lcdstats M
+Status:Uptime==~lcdstats U
+Status:Disk==~lcdstats D
+Status:Big Processes==~lcdstats S
+Status:Time==~lcdstats T
+
+Sound:_cancel==@Main
+#Sound:Volume Level==@SoundVolume
+Sound:Stop==*/opt/oss/soundoff
+Sound:(Re)Start==*/opt/oss/imedia-restart
+
+#SoundVolume:_cancel==@Sound
+#SoundVolume:Playback==*
+#SoundVolume:Recording MIC==*
+#SoundVolume:Recording LineIN==*
+
+Network:_cancel==@Main
+Network:View/Edit Settings==@NetworkSetup
+Network:Save Settings==&lcd_save_network_changes()
+Network:Restart Network==*/etc/rcS.d/10network
+
+NetworkSetup:_cancel==@Network
+NetworkSetup:IP: $IP$==&lcd_set_ip (">i$IP$:System IP:<")
+NetworkSetup:NM: $NETMASK$==&lcd_set_netmask (">i:Netmask:<")
+NetworkSetup:GW: $GATEWAY$==&lcd_set_gateway (">i:Gateway:<")
+NetworkSetup:FQDN: $FQDN$==&lcd_set_hostname (">:Hostname:<")
+NetworkSetup:DNS1: $DNS1$==&lcd_set_dns1 (">i:DNS Server 1 IP:<")
+NetworkSetup:DNS2: $DNS2$==&lcd_set_dns2 (">i:DNS Server 2 IP:<")
+
+
+Logs:_cancel==@Main
+Logs:Tail messages==&tail_file("/var/log/messages")
+Logs:Tail http==&tail_file("/var/log/httpd/error.log")
+Logs:Tail kernel==&tail_file("/var/log/dmesg")
+#Logs:{prog status?==1}Program Off==%3-0*prog stop??{prog status?>1}Program Kill==%3-0*prog kill??Program On==%3-1*prog start
+#Logs:{prog status?==1}Program Off($stat$)==%3-0*prog stop+stat=1+??{prog status?>1}Program Kill==%3-0*prog kill??Program On($stat$)==%3-1*prog start+stat=0+
+
+LCD:_cancel==@Main
+LCD:Backlight On==&backlight(1)
+LCD:Backlight Off==&backlight(0)
+
+GPO:_cancel==@Main
+GPO:GPO 1 On==%1-1^nop
+GPO:GPO 1 Off==%1-0^nop
+GPO:GPO 2 On==%2-1^nop
+GPO:GPO 2 Off==%2-0^nop
+GPO:GPO 3 On==%3-1^nop
+GPO:GPO 3 Off==%3-0^nop
+GPO:GPO 4 On==%4-1^nop
+GPO:GPO 4 Off==%4-0^nop

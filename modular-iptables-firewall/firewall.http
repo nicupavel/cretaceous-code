@@ -1,0 +1,19 @@
+function httpd_allow ()
+{
+
+	for i in $HTTPD_ALLOW; do
+	
+		iptables -A FORWARD -p tcp --sport $UNPRIVPORTS -d $i \
+			 --dport 80 -m state --state NEW -j ACCEPT
+
+		iptables -A FORWARD -p tcp --sport $UNPRIVPORTS -d $i \
+			 --dport 443 -m state --state NEW -j ACCEPT
+	done
+		
+	echo "httpd"
+}
+
+function MODULE_EXPORT ()
+{
+	httpd_allow
+}

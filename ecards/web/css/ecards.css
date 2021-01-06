@@ -1,0 +1,26 @@
+a.navbar  {
+	font-size : 10px;
+	font-family : Tahoma;
+	font-weight : normal;
+	font-style : normal;
+	color : #FFFFFF;
+	text-decoration : none;
+}
+
+a.navbar:hover  {
+	font-size :10px;
+	font-family : Tahoma;
+	font-weight : normal;
+	font-style : normal;
+	color : #FFFFFF;
+	text-decoration : underline;
+}
+
+.bartext {
+	font-family : Tahoma;
+	font-size : 9px;
+	font-style : normal;
+	font-variant : normal;
+	font-weight : lighter;
+	color : White;
+}

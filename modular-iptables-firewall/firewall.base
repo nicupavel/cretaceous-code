@@ -1,0 +1,43 @@
+function initialize ()
+{
+	iptables --flush
+	iptables -t nat --flush
+	iptables -t mangle --flush
+	iptables --delete-chain
+
+	#iptables -P FORWARD DROP
+	
+	iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+	iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+	iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+	
+	# add droping for INVALID state here.
+
+	echo "base init"
+}
+
+function allow_intra_dmz ()
+{
+	for i in $DMZ; do
+
+		iptables -A FORWARD -s $i -j ACCEPT
+	done
+
+	for i in $DMZ_PRIV; do
+		for j in $DMZ; do
+			iptables -A FORWARD -s $i -d $j -j ACCEPT
+		done
+	done
+	
+	# allow input on this machine ?
+
+	echo "base intra dmz"
+}
+
+function MODULE_EXPORT ()
+{
+	initialize
+	allow_intra_dmz
+}
+
+

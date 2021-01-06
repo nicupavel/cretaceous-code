@@ -1,0 +1,46 @@
+From d8b69a5e794794b2dd69d4f987bf1ef6bf8caba9 Mon Sep 17 00:00:00 2001
+From: Nicu Pavel <npavel@mini-box.com>
+Date: Wed, 25 Nov 2009 15:16:49 +0200
+Subject: [PATCH] add support for both banks of memory on Atmel G45 board
+
+---
+ board/atmel/at91sam9m10g45ek/at91sam9m10g45ek.c |    6 +++++-
+ include/configs/at91sam9m10g45ek.h              |    3 ++-
+ 2 files changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/board/atmel/at91sam9m10g45ek/at91sam9m10g45ek.c b/board/atmel/at91sam9m10g45ek/at91sam9m10g45ek.c
+index 75536c0..e62c2b1 100644
+--- a/board/atmel/at91sam9m10g45ek/at91sam9m10g45ek.c
++++ b/board/atmel/at91sam9m10g45ek/at91sam9m10g45ek.c
+@@ -303,8 +303,12 @@ int board_init(void)
+ 
+ int dram_init(void)
+ {
+-	gd->bd->bi_dram[0].start = PHYS_SDRAM;
++	/* For the first DRAM bank */
++	gd->bd->bi_dram[0].start = PHYS_SDRAM_BANK_1;
+ 	gd->bd->bi_dram[0].size = PHYS_SDRAM_SIZE;
++	/* For the second DRAM bank */
++	gd->bd->bi_dram[1].start = PHYS_SDRAM;
++	gd->bd->bi_dram[1].size = PHYS_SDRAM_SIZE;
+ 	return 0;
+ }
+ 
+diff --git a/include/configs/at91sam9m10g45ek.h b/include/configs/at91sam9m10g45ek.h
+index fdd799d..4c24aa9 100644
+--- a/include/configs/at91sam9m10g45ek.h
++++ b/include/configs/at91sam9m10g45ek.h
+@@ -100,8 +100,9 @@
+ #define CONFIG_CMD_USB		1
+ 
+ /* SDRAM */
+-#define CONFIG_NR_DRAM_BANKS		1
++#define CONFIG_NR_DRAM_BANKS		2
+ #define PHYS_SDRAM			0x70000000
++#define PHYS_SDRAM_BANK_1			0x20000000
+ #define PHYS_SDRAM_SIZE			0x08000000	/* 128 megs */
+ 
+ /* DataFlash */
+-- 
+1.6.3.3
+

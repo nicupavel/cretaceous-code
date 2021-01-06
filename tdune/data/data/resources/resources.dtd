@@ -1,0 +1,38 @@
+<!ELEMENT resources (resource*)>
+
+<!ENTITY % elements "(energy?, metal?, organic?, ore?, residues?)">
+    <!-- How much energy can be converted from resource -->
+    <!ELEMENT energy EMPTY>
+    <!ATTLIST energy value CDATA #REQUIRED>
+    <!-- How much metal can be converted from resource -->
+    <!ELEMENT metal EMPTY>
+    <!ATTLIST metal value CDATA #REQUIRED>
+    <!-- How much organic can be converted from resource -->
+    <!ELEMENT organic EMPTY>
+    <!ATTLIST organic value CDATA #REQUIRED>
+    <!-- How much ore can be converted from resource -->
+    <!ELEMENT ore EMPTY>
+    <!ATTLIST ore value CDATA #REQUIRED>
+    <!-- How much residues the resource has -->
+    <!ELEMENT residues EMPTY>
+    <!ATTLIST residues value CDATA #REQUIRED>
+
+<!ELEMENT resource  (credits, weigth, volume, composition, description?)>
+    <!-- Resource ID -->
+    <!ATTLIST resource xmlid ID #REQUIRED>
+    <!ATTLIST resource id CDATA #REQUIRED>
+    <!ATTLIST resource name CDATA #REQUIRED>
+	<!-- Credits per resource unit -->
+	<!ELEMENT credits EMPTY>
+	<!ATTLIST credits value CDATA #REQUIRED>
+	<!-- Weigth of a resource unit -->
+	<!ELEMENT weigth EMPTY>
+	<!ATTLIST weigth value CDATA #REQUIRED>
+	<!-- Volume per resource unit -->
+	<!ELEMENT volume EMPTY>
+	<!ATTLIST volume value CDATA #REQUIRED>
+    
+	<!-- Composition of resource -->
+	<!ELEMENT composition %elements;>
+	<!-- Description of resource -->
+	<!ELEMENT description (#PCDATA)>

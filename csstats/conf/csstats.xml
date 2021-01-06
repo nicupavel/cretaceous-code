@@ -1,0 +1,19 @@
+<csstats>
+    <limits>
+	<timeout>30</timeout>
+    </limits>
+    <query>
+	<server>
+	    <host>games.turbozone.ro</host>
+	    <port>27015</port>
+	</server>
+	<server>
+	    <host>voodoo.is.pcnet.ro</host>
+	    <port>27015</port>
+	</server>
+	<server>
+	    <host>ram.rdsnet.ro</host>
+	    <port>27015</port>
+	</server>
+    </query>
+</csstats>

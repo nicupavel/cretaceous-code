@@ -1,0 +1,4 @@
+AuthName "e-cards administration area"
+AuthType Basic
+AuthUserFile /home/httpd/www.ecards.ro/html/admin/.htusers
+Require valid-user

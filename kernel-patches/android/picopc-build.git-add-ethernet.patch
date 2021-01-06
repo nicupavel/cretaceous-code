@@ -1,0 +1,25 @@
+From bf8a4b817c2fa0ec2fea2bff266681811c00225f Mon Sep 17 00:00:00 2001
+From: Nicu Pavel <npavel@mini-box.com>
+Date: Mon, 20 Jun 2011 14:07:21 +0300
+Subject: [PATCH] [picopc] Added ethernet sources to the build system
+
+Change-Id: I28bcc75cbb0c2d7906dad46cad902b2dadb22416
+---
+ core/pathmap.mk |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/core/pathmap.mk b/core/pathmap.mk
+index fe7ba1a..99fd3e3 100644
+--- a/core/pathmap.mk
++++ b/core/pathmap.mk
+@@ -86,6 +86,7 @@ FRAMEWORKS_BASE_SUBDIRS := \
+ 	    opengl \
+ 	    sax \
+ 	    telephony \
++	    ethernet \
+ 	    wifi \
+ 	    vpn \
+ 	    keystore \
+-- 
+1.7.1
+

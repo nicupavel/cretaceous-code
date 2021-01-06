@@ -1,0 +1,5 @@
+module_watchdog=30
+module_name=MP3Encoder-1
+module_command=/mediabox/webadmin/web-control/cgi-bin/wrappers/encoders/mp3encoder.wrapper   --timestamp=on --server=127.0.0.1 --mountpoint=mp3audio1.mp3 --port=8060 --password=live2me --bitrate=160 --samplerate=44100 --audio_device=/dev/imux7 --quality=0.3 --bitratemode=cbr --name \"'MP3 streaming'\" --lowpass= --highpass= --buffer= --channels=2 --bitspersample=16 --config_file= 
+device=/dev/imux7
+device_path=/mediabox/webadmin/web-control/cgi-bin/values/encoders-audio-devs

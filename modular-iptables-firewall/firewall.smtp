@@ -1,0 +1,23 @@
+function smtpd_allow ()
+{
+
+	for i in $SMTPD_ALLOW; do
+	
+#		iptables -A FORWARD -p tcp --sport $UNPRIVPORTS -d $i \
+#			 --dport 25 -m state --state NEW -j ACCEPT
+#	
+		for j in $SMTPD_ANTISPAM_ALLOWDED; do
+	
+			iptables -A FORWARD -p tcp -s $j --sport $UNPRIVPORTS -d $i \
+				--dport 25 -m state --state NEW -j ACCEPT
+			
+		done
+	done
+
+	echo "smtpd"
+}
+
+function MODULE_EXPORT ()
+{
+	smtpd_allow
+}

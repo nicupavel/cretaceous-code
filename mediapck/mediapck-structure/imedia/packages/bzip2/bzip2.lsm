@@ -1,0 +1,9 @@
+Name		: bzip2
+Version		: 1.0.3
+Arch		: i386
+Vendor		: Ituner Networks Corporation
+Category	: System Tools
+Target systems	: common
+Description	: A file compression utility
+Details		: Bzip2 is a freely available, patent-free, high-quality data compressor
+that uses the same command line flags as gzip.

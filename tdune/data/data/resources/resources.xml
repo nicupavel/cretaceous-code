@@ -1,0 +1,34 @@
+<!DOCTYPE resources SYSTEM "resources.dtd">
+<resources>
+    <resource xmlid="resource0" id="0" name="Uranium">
+	<credits value="100"/>
+	<weigth value="1"/>
+	<volume value="1"/>
+	<composition>
+	    <energy value="100"/>
+	    <metal value="0"/>
+	    <organic value="0"/>
+	    <ore value="0"/>
+	    <residues value="0"/>
+	</composition>
+	<description>
+	    A radioactive element providing high energy rate conversion and good credits
+	</description>
+    </resource>
+
+    <resource xmlid="resource1" id="1" name="Iron">
+	<credits value="100"/>
+	<weigth value="1"/>
+	<volume value="1"/>
+	<composition>
+	    <energy value="100"/>
+	    <metal value="0"/>
+	    <organic value="0"/>
+	    <ore value="0"/>
+	    <residues value="0"/>
+	</composition>
+	<description>
+	    Provides metals
+	</description>
+    </resource>
+</resources>

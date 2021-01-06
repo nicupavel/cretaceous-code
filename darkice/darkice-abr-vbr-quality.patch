@@ -1,0 +1,328 @@
+Common subdirectories: darkice-pristine/src/CVS and darkice-new/src/CVS
+diff -u darkice-pristine/src/DarkIce.cpp darkice-new/src/DarkIce.cpp
+--- darkice-pristine/src/DarkIce.cpp	Thu Mar 28 18:43:11 2002
++++ darkice-new/src/DarkIce.cpp	Sat Mar 30 21:21:47 2002
+@@ -214,6 +214,8 @@
+         bool            isPublic        = false;
+         int             lowpass         = 0;
+         int             highpass        = 0;
++        unsigned int    quality         = 0;
++	unsigned int    bitrateMode	= 0;
+         const char    * localDumpName   = 0;
+         FileSink      * localDumpFile   = 0;
+ 
+@@ -238,7 +240,11 @@
+         str         = cs->get( "lowpass");
+         lowpass     = str ? Util::strToL( str) : 0;
+         str         = cs->get( "highpass");
+-        highpass    = str ? Util::strToL( str) : 0;
++	highpass    = str ? Util::strToL( str) : 0;
++        str         = cs->get("quality");
++        quality     = str ? Util::strToL( str) : 2;
++	str         = cs->get ("bitrateMode");
++	bitrateMode = str ? Util::strToL( str) : 0;
+         localDumpName = cs->get( "localDumpFile");
+ 
+         // go on and create the things
+@@ -282,7 +288,9 @@
+                                                    sampleRate,
+                                                    dsp->getChannel(),
+                                                    lowpass,
+-                                                   highpass );
++                                                   highpass,
++						   quality,
++						   bitrateMode);
+ 
+         encConnector->attach( audioOuts[u].encoder.get());
+ #endif // HAVE_LAME_LIB
+@@ -480,7 +488,7 @@
+                                 unsigned int        bufferSecs  )
+                                                         throw ( Exception )
+ {
+-    // look for IceCast encoder output streams,
++    // look for Shoutcast encoder output streams,
+     // sections [shoutcast-0], [shoutcast-1], ...
+     char            stream[]        = "shoutcast- ";
+     size_t          streamLen       = Util::strLen( stream);
+@@ -516,6 +524,8 @@
+         bool            isPublic        = false;
+         int             lowpass         = 0;
+         int             highpass        = 0;
++        unsigned int    quality         = 0;
++	unsigned int    bitrateMode     = 0;
+         const char    * irc             = 0;
+         const char    * aim             = 0;
+         const char    * icq             = 0;
+@@ -539,6 +549,10 @@
+         lowpass     = str ? Util::strToL( str) : 0;
+         str         = cs->get( "highpass");
+         highpass    = str ? Util::strToL( str) : 0;
++        str         = cs->get("quality");
++        quality     = str ? Util::strToL( str) : 2;
++	str         = cs->get ("bitrateMode");
++	bitrateMode = str ? Util::strToL( str) : 0;
+         irc         = cs->get( "irc");
+         aim         = cs->get( "aim");
+         icq         = cs->get( "icq");
+@@ -585,7 +599,9 @@
+                                                    sampleRate,
+                                                    dsp->getChannel(),
+                                                    lowpass,
+-                                                   highpass );
++                                                   highpass,
++				                   quality,
++						   bitrateMode );
+ 
+         encConnector->attach( audioOuts[u].encoder.get());
+ #endif // HAVE_LAME_LIB
+@@ -626,6 +642,8 @@
+         unsigned int        sampleRate      = 0;
+         int                 lowpass         = 0;
+         int                 highpass        = 0;
++        unsigned int        quality         = 0;
++	unsigned int        bitrateMode     = 0;
+ 
+         format      = cs->getForSure( "format", " missing in section ", stream);
+         if ( !Util::strEq( format, "vorbis") && !Util::strEq( format, "mp3") ) {
+@@ -644,6 +662,10 @@
+         lowpass     = str ? Util::strToL( str) : 0;
+         str         = cs->get( "highpass");
+         highpass    = str ? Util::strToL( str) : 0;
++        str         = cs->get("quality");
++        quality     = str ? Util::strToL( str) : 2;
++	str         = cs->get ("bitrateMode");
++	bitrateMode = str ? Util::strToL( str) : 0;
+ 
+         // go on and create the things
+ 
+@@ -674,7 +696,9 @@
+                                                     sampleRate,
+                                                     dsp->getChannel(),
+                                                     lowpass,
+-                                                    highpass );
++                                                    highpass,
++				                    quality,
++						    bitrateMode );
+ #endif // HAVE_LAME_LIB
+         } else if ( Util::strEq( format, "vorbis") ) {
+ #ifndef HAVE_VORBIS_LIB
+diff -u darkice-pristine/src/LameLibEncoder.cpp darkice-new/src/LameLibEncoder.cpp
+--- darkice-pristine/src/LameLibEncoder.cpp	Thu Mar 28 18:38:37 2002
++++ darkice-new/src/LameLibEncoder.cpp	Sat Mar 30 21:58:05 2002
+@@ -117,13 +117,64 @@
+                  "set lame out sample rate",
+                  lame_get_out_samplerate( lameGlobalFlags));
+     
+-    if ( 0 > lame_set_brate( lameGlobalFlags, getOutBitrate()) ) {
+-        throw Exception( __FILE__, __LINE__,
+-                         "lame lib setting output bit rate error",
+-                         getOutBitrate() );
+-    }
++    if ( bitrateMode == 1 ) {
++	if ( 0 > lame_set_VBR( lameGlobalFlags,vbr_mtrh)) {
++	    throw Exception( __FILE__, __LINE__,
++			    "lame lib setting vbr error",
++			    bitrateMode);
++	}
++	
++	reportEvent( 5, "set lame vbr bitrate", lame_get_VBR( lameGlobalFlags));
++	
++	if ( 0 > lame_set_VBR_q( lameGlobalFlags, quality)) {
++	    throw Exception( __FILE__, __LINE__,
++			    "lame lib setting vbr quality error",
++			    quality);
++	}
++	
++	reportEvent( 5, "set lame vbr quality", lame_get_VBR_q( lameGlobalFlags));
++    } 
++    else if ( bitrateMode == 2 ) {
++	    if ( 0 > lame_set_VBR( lameGlobalFlags,vbr_abr)) {
++		throw Exception( __FILE__, __LINE__,
++				"lame lib setting abr error",
++				bitrateMode);
++	    }
++	    
++	    reportEvent( 5, "set lame abr bitrate", lame_get_VBR( lameGlobalFlags));
++	    
++	    if ( 0 > lame_set_VBR_mean_bitrate_kbps( lameGlobalFlags, getOutBitrate())) {
++		    throw Exception( __FILE__, __LINE__,
++				"lame lib setting abr mean bitrate error",
++				getOutBitrate());
++	    }
++	    
++	    reportEvent( 5, "set lame abr mean bitrate", 
++			lame_get_VBR_mean_bitrate_kbps( lameGlobalFlags));
++	}
++	else {	 
++	    if ( 0 > lame_set_brate( lameGlobalFlags, getOutBitrate()) ) {
++    		throw Exception( __FILE__, __LINE__,
++            	        	"lame lib setting output bit rate error",
++                        	getOutBitrate() );
++	    }
++	    
++	    reportEvent( 5, "set lame bit rate", lame_get_brate( lameGlobalFlags));
++	    
++	    if ( 0 > lame_set_quality( lameGlobalFlags, quality) ) {
++    		throw Exception( __FILE__, __LINE__,
++                        	"lame lib setting quality error",
++                        	quality );
++	    }
++	    
++	    reportEvent( 5, "set lame quality", lame_get_quality( lameGlobalFlags));
++	}
+ 
+-    reportEvent( 5, "set lame bit rate", lame_get_brate( lameGlobalFlags));
++    
++    
++    
++
++    
+     
+     if ( 0 > lame_set_lowpassfreq( lameGlobalFlags, lowpass) ) {
+         throw Exception( __FILE__, __LINE__,
+@@ -145,15 +196,10 @@
+                  "set lame highpass frequency",
+                  lame_get_highpassfreq( lameGlobalFlags));
+ 
+-    // not configurable lame settings
+-
+-    if ( 0 > lame_set_quality( lameGlobalFlags, 2) ) {
+-        throw Exception( __FILE__, __LINE__,
+-                         "lame lib setting quality error",
+-                         2 );
+-    }
+ 
+-    reportEvent( 5, "set lame quality", lame_get_quality( lameGlobalFlags));
++    
++    
++    // not configurable lame settings
+     
+     if ( 0 > lame_set_exp_nspsytune( lameGlobalFlags, 1) ) {
+         throw Exception( __FILE__, __LINE__,
+diff -u darkice-pristine/src/LameLibEncoder.h darkice-new/src/LameLibEncoder.h
+--- darkice-pristine/src/LameLibEncoder.h	Thu Mar 28 18:38:37 2002
++++ darkice-new/src/LameLibEncoder.h	Sat Mar 30 21:56:06 2002
+@@ -94,6 +94,14 @@
+          *  input is cut.
+          */
+         int                             highpass;
++	
++	/**
++         *  Noise shaping & psycho acoustic quality algorithm
++         *  0 - high quality slow ... 9 - poor quality fast
++         */
++	
++	unsigned int			quality;
++	unsigned int			bitrateMode;
+ 
+         /**
+          *  Initialize the object.
+@@ -107,16 +115,23 @@
+          *                  Input below this frequency is cut.
+          *                  If 0, lame's default values are used,
+          *                  which depends on the out sample rate.
++         *  @param quality  Noise shaping & psycho acoustic quality 
++         *                  algorithm.
++         *                  0 - high quality slow ... 9 - poor quality fast
+          *  @exception Exception
+          */
+         inline void
+         init ( Sink           * sink,
+                int              lowpass,
+-               int              highpass )                  throw ( Exception )
++               int              highpass,
++	       unsigned int	quality,
++	       unsigned	int	bitrateMode )                  throw ( Exception )
+         {
+             this->sink     = sink;
+             this->lowpass  = lowpass;
+             this->highpass = highpass;
++	    this->quality  = quality;
++	    this->bitrateMode = bitrateMode;
+ 
+             if ( getInBitsPerSample() != 16 && getInBitsPerSample() != 8 ) {
+                 throw Exception( __FILE__, __LINE__,
+@@ -176,7 +191,10 @@
+          *  @param highpass frequency threshold for the highpass filter.
+          *                  Input below this frequency is cut.
+          *                  If 0, lame's default values are used,
+-         *                  which depends on the out sample rate.
++	 *                  which depends on the out sample rate.
++	 *  @param quality  Noise shaping & psycho acoustic quality 
++         *                  algorithm.
++         *                  0 - high quality slow ... 9 - poor quality fast
+          *  @exception Exception
+          */
+         inline
+@@ -188,7 +206,9 @@
+                             unsigned int    outSampleRate = 0,
+                             unsigned int    outChannel    = 0,
+                             int             lowpass       = 0,
+-                            int             highpass      = 0 )
++                            int             highpass      = 0,
++			    unsigned int    quality       = 0,
++			    unsigned int    bitrateMode   = 0 )
+                                                         throw ( Exception )
+             
+                     : AudioEncoder ( inSampleRate,
+@@ -198,7 +218,7 @@
+                                      outSampleRate,
+                                      outChannel )
+         {
+-            init( sink, lowpass, highpass );
++            init( sink, lowpass, highpass, quality, bitrateMode );
+         }
+ 
+         /**
+@@ -220,6 +240,9 @@
+          *                  Input below this frequency is cut.
+          *                  If 0, lame's default values are used,
+          *                  which depends on the out sample rate.
++         *  @param quality  Noise shaping & psycho acoustic quality 
++         *                  algorithm.
++         *                  0 - high quality slow ... 9 - poor quality fast
+          *  @exception Exception
+          */
+         inline
+@@ -229,7 +252,9 @@
+                             unsigned int            outSampleRate = 0,
+                             unsigned int            outChannel    = 0,
+                             int                     lowpass       = 0,
+-                            int                     highpass      = 0 )
++                            int                     highpass      = 0,
++			    unsigned int	    quality       = 0,
++			    unsigned int            bitrateMode   = 0 )
+                                                             throw ( Exception )
+             
+                     : AudioEncoder ( as,
+@@ -237,7 +262,7 @@
+                                      outSampleRate,
+                                      outChannel )
+         {
+-            init( sink, lowpass, highpass );
++            init( sink, lowpass, highpass, quality, bitrateMode );
+         }
+ 
+         /**
+@@ -250,8 +275,10 @@
+                                                             throw ( Exception )
+                     : AudioEncoder( encoder )
+         {
+-            init( encoder.sink.get(), encoder.lowpass, encoder.highpass );
++            init( encoder.sink.get(), encoder.lowpass, encoder.highpass, encoder.quality, 
++		encoder.bitrateMode );
+         }
++         
+ 
+         /**
+          *  Destructor.
+@@ -280,7 +307,8 @@
+             if ( this != &encoder ) {
+                 strip();
+                 AudioEncoder::operator=( encoder);
+-                init( encoder.sink.get(), encoder.lowpass, encoder.highpass );
++                init( encoder.sink.get(), encoder.lowpass, encoder.highpass, encoder.quality, 
++		    encoder.bitrateMode );
+             }
+ 
+             return *this;

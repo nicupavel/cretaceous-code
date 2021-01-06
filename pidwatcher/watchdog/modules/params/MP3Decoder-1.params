@@ -1,0 +1,5 @@
+module_watchdog=30
+module_name=MP3Decoder-1
+module_command=/mediabox/webadmin/web-control/cgi-bin/wrappers/decoders/mp3decoder.wrapper -q -o oss -a /dev/omux1  --list /mediabox/webadmin/web-control/cgi-bin/custom/playlists/sample.txt
+device=/dev/omux1
+device_path=/mediabox/webadmin/web-control/cgi-bin/values/decoders-audio-devs

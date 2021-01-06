@@ -1,0 +1,1169 @@
+#!/usr/bin/perl
+
+#-------------------------------------------------------------------------------
+# Libraries needed
+#-------------------------------------------------------------------------------
+use strict;
+use IO::Socket;
+use Fcntl;
+#-------------------------------------------------------------------------------
+# Global constants
+#-------------------------------------------------------------------------------
+my $LCDCONTROL_DIR = `dirname $0`;
+chomp($LCDCONTROL_DIR);
+
+#-------------------------------------------------------------------------------
+# LCD Keypad configuration file
+#-------------------------------------------------------------------------------
+my $LCDKEYPAD_CONF="$LCDCONTROL_DIR/lcdkeypad.conf";
+
+#-------------------------------------------------------------------------------
+# Global variables
+#-------------------------------------------------------------------------------
+my $menus_file 	= "$LCDCONTROL_DIR/lcdmenus.conf";
+my $vars_file = "$LCDCONTROL_DIR/lcdinputs.conf";
+
+my $debug = 1;
+
+# Need these as rolling input character sets.
+my @alphaset 	= ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
+		   's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '.', '-', '_', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9');
+my @numset 	= ('0','1','2','3','4','5','6','7','8','9','.');
+
+my @options 	= ();
+my %menus 	= ();
+my %defaults 	= ();
+
+# Storage for custom variables
+my %vars 	= (); 
+
+my $selected 		= 1;
+my @select_path 	= ();
+my $maxopts 		= 0;
+my $prev_maxopts 	= 0;
+my $cancel_action 	= '@Main';
+my $was_cancelled 	= 0;
+my $prev_menu 		= 'Main';
+my $selectchar 		= '>';
+
+# default keymap if no config found works on 1u lcd
+my %key_defaults = (
+    'J','up',
+    'D','down',
+    'I','left',
+    'H','right',
+    'C','go',
+    'E','cancel',
+    'O','f1',
+    'N','f2',
+    'M','f3'
+);
+
+
+#----------------------------------------------------------------------------------------------------------
+# GetLCDKeyPad(LCD_KEYPAD_FILE); returns an array of hashes keypadconfig.
+#----------------------------------------------------------------------------------------------------------
+sub GetLCDKeyPad($)
+{
+    my $file = shift;
+    my %key = ();
+    
+    open (FILE, "< $file") || return;
+    while (<FILE>){
+	chomp;                  # no newline
+	s/#.*//;                # no comments
+	s/^\s+//;               # no leading white
+	s/\s+$//;               # no trailing white
+	next unless length;     # anything left?
+	my ($var, $value) = split(/\s*=\s*/, $_, 2);
+	if (length($var) > 1) {
+	    print ("Invalid key, skipping.\n") if $debug;
+	    next;
+	}
+	$var=uc($var);
+	$key{$var} = $value;
+	print ("$var=$key{$var}\n") if $debug;
+    }
+    
+    close (FILE);
+    return %key;
+}
+
+#-------------------------------------------------------------------------------
+# main() subroutine
+#-------------------------------------------------------------------------------
+my %key = ();
+if (! defined (%key = GetLCDKeyPad($LCDKEYPAD_CONF))) {
+    print "Cannot get keypad config from $LCDKEYPAD_CONF. Assigning defaults.\n" if $debug;
+    %key = %key_defaults;
+}
+
+# Connect to the server...
+my $remote = IO::Socket::INET->new(
+    Proto     => "tcp",
+    PeerAddr  => "localhost",
+    PeerPort  => "13666",
+)
+|| die "Cannot connect to LCDproc port\n";
+
+# Make sure our messages get there right away
+$remote->autoflush(1);
+
+sleep(1); # Give server plenty of time to notice us...
+
+
+
+print $remote "hello\n";
+my $lcdconnect = <$remote>;
+#connect LCDproc 0.4-pre9 lcd wid 20 hgt 4 cellwid 5 cellhgt 8
+$lcdconnect =~ /.*?wid\s(\d+).*?hgt\s(\d+).*/;
+my ($width,$height) = ($1,$2);
+#$height = 2;	# Hack...still reports 4 for the 2 line display.
+print "$lcdconnect (W=$width H=$height)\n" if($debug);
+
+my $blanks = (' ') x $width;	# used to blank out a line
+
+# Turn off blocking mode...
+fcntl($remote, F_SETFL, O_NONBLOCK);
+my $menuscreen = 'menu';
+
+# Set up some screen widgets...
+print $remote "client_set name {Menu Client (Perl)}\n";
+print $remote "screen_add $menuscreen\n";
+print $remote "screen_set $menuscreen priority 65 name {Menu}\n";
+#print $remote "widget_add menu title title\n";
+#print $remote "widget_set menu title {Menu}\n";
+
+# Make sure our cursor is clean
+print $remote "cursorblink off\ncursor_position 1 1\n";
+
+init_inputs(1);
+init_menus();
+
+if (defined $vars{LASTMENU}) {
+    load_menu($vars{LASTMENU},1);
+} else {
+    load_menu('Menu',1);
+}
+
+if (defined $vars{LASTACTION}) {
+    do_action($vars{LASTACTION});
+} 
+
+redraw();
+
+while(1)
+{
+	# Handle input...  (just spew it to the console)
+	my $f = &get_keypress;
+	
+	if( $f eq 'up' ) {
+		$selected = ($selected > 1) ? $selected - 1 : $maxopts;
+		redraw();
+	} elsif( $f eq 'down' ) {
+		$selected = ($selected < $maxopts) ? $selected + 1 : 1;
+		redraw();
+	} elsif( $f eq 'go' ) {
+		my ($name,$action) = split(/==/, $options[$selected-1], 2);
+		do_action($action);
+		redraw();
+	} elsif( $f eq 'cancel' ) {
+		$was_cancelled = 1;
+		do_action($cancel_action);
+		redraw();
+	} elsif( defined $defaults{$f} ) {
+		do_action($defaults{$f});
+		redraw();
+	} else {
+		print "Unknown function: ($f)\n" if ($debug == 2);
+	}
+	
+	select(undef, undef, undef, 0.25);	# Prevent 100% cpu utilization
+}
+
+close ($remote)            || die "close: $!";
+exit;
+#-------------------------------------------------------------------------------
+sub do_action
+{
+	my $action = $_[0];
+	my $save = 1;
+	#my ($action,$reset_selected) = @_;
+	
+	# Check if we need to re-init variables after running this
+	my $re_init_vars = 0;
+	if( $action =~ /^\+/ )
+	{
+		$re_init_vars = 1;
+		$action =~ s/^\+//;
+	}
+
+	# Check if this action addresses a GPO
+	if( $action =~ /^\%(\d+)-(\d)(.*)/ )
+	{
+		my $gpo = $1;
+		my $status = $2;
+		$action = $3;
+		&switch_gpo($gpo,$status);
+	}
+
+	# Check if this action sets any custom variables.
+	if( $action =~ /\+(\S+)\+/ )
+	{
+		&set_variables($1);
+		$action =~ s/\+\S+\+//;
+	}
+
+	if( $action =~ /^@(.*)/ ) {	# Go to another menu
+		my $menu = $1;
+		print "Goto Menu: $menu\n" if($debug);
+		&load_menu($menu,1);
+	} elsif( $action =~ /^&(.*)/ ) {	# Run this function
+		my $function = $1;
+		$function =~ s/>(.*?)</&get_input($1)/eg;
+		print "Run Function: $function\n" if($debug);
+		eval "&$function";
+		&init_inputs($re_init_vars);
+	} elsif( $action =~ /^\*(.*)/ || $action =~ /^\~(.*)/) {	# Run system command or safe system command
+		push(@select_path, $selected) if( $was_cancelled != 1);	# Remember what option we were pointing at.
+		# Is the command safe for saving ?
+		if ($action =~ /^\~(.*)/) {
+		    print "Saving Safe Action: $action \n" if ($debug);
+		    $vars{LASTACTION} = $action;
+		    # Save LCD status now since the system can be rebooted when command was running. 
+		    write_inputs();
+		    $save = 0;
+		}
+		my $cmd = $1;
+		print "Run Command: $cmd\n" if($debug);
+		if( $cmd !~ /^\// ) {	# Not absolute path
+			my $path = $defaults{'exepath'};
+			warn "Default path not defined!\n" if( !$path );
+			$cmd = $path . $cmd;
+		}
+		print "Full command: $cmd\n" if($debug);
+		$cmd =~ s/>(.*?)</&get_input($1)/eg;
+		if( $was_cancelled == 1 ) {
+			print "Cancelled!\n" if($debug);
+			&show_temp_screen("Cancelled...");
+			&init_inputs($re_init_vars);
+			&load_menu("$prev_menu",0);
+		} else {
+			print "CMD After subst: $cmd\n" if($debug);
+			my $msg = "";
+			my $rc = `$cmd`;
+			chomp $rc;
+			$msg = "$rc" if( $rc ne '' );
+			&init_inputs($re_init_vars);
+			&load_menu("$prev_menu",0);
+			$vars{LASTACTION} = undef;
+		}
+	} elsif( $action =~ /^\^(.*)/ ) {	# Internal...
+		my $cmd = $1;
+		print "Internal Command: $cmd\n" if($debug);
+	} else {
+		print "Unknown action: $action\n" if($debug);
+	}
+
+	$was_cancelled = 0;
+	
+	#Write final LCD status (eg: command finished)
+	write_inputs();
+}
+#-------------------------------------------------------------------------------
+sub redraw
+{
+	if($debug)
+	{
+		print "redraw: selected = $selected\n";
+		print "redraw: maxopts = $maxopts\n";
+		print "redraw: prev_menu = $prev_menu\n";
+		print "redraw: select_path = ";
+		foreach my $s (@select_path)
+		{
+			print "$s";
+		}
+		print "\n";
+	}
+	# Need to account for menu lists longer than display height here.
+	my $op = 1;
+	if( $selected > $height ) {
+		my $diff = $selected - $height;
+		$op += $diff;	# Scrolls list to start later if too many entries for display
+	}
+	
+	my $stop = ($maxopts <= $height) ? $maxopts : $height;
+
+	for(my $i=1; $i<=$stop; $i++)
+	{
+		my $line = $options[$op-1];
+		my ($name,$action) = split(/==/, $line, 2);
+		if( $op == $selected ) {
+			$name = "$selectchar$name";
+		} else {
+			$name = " $name";
+		}
+		# Output format is: widget_set menu item_no column row {text}
+		print $remote "widget_set $menuscreen $i 1 $i {$name}\n";
+		$op++;
+	}
+}	
+#-------------------------------------------------------------------------------
+sub widget_setup
+{
+	print "Deleting old widgets...(prev_maxopts=$prev_maxopts)\n" if($debug);
+	for(my $i=1; $i<=$prev_maxopts; $i++)
+	{
+		print $remote "widget_del $menuscreen $i\n";
+	}
+
+	print "Adding widgets...\n" if($debug);
+	for(my $i=1; $i<=$maxopts; $i++)
+	{
+		print $remote "widget_add $menuscreen $i string\n";
+	}
+}
+#-------------------------------------------------------------------------------
+sub backlight
+{
+	my $mode = $_[0];
+
+	if( $mode == 1 )
+	{
+		print $remote "backlight on\n";
+	}
+	elsif( $mode == 0 )
+	{
+		print $remote "backlight off\n";
+	}
+	else
+	{
+		print $remote "backlight toggle\n";
+	}
+}
+#-------------------------------------------------------------------------------
+sub load_menu
+{
+	my ($menu,$reset_selected) = @_;
+
+	if( !defined($menus{$menu}) ) {
+		print "Error: Menu $menu not found.\n" if($debug);
+		return;
+	}
+	
+	
+	
+	@options = ();
+	foreach my $m (split(/\n/, $menus{$menu}))
+	{
+		$m = &choose_option($m) if( $m =~ /^{/ );
+
+		# Full line substitute of internal variables:
+		while( $m =~ /\$(\S+)\$/ )
+		{
+			my $v = $1;
+			if( defined $vars{$v} )
+			{
+				$m =~ s/\$$v\$/$vars{$v}/g;
+			}
+			else
+			{
+				$m =~ s/\$$v\$//g;
+			}
+		}
+
+		my($n,$a) = split(/==/, $m, 2);
+		if( $n eq '_cancel' ) {		# special meaning for this entry
+			$cancel_action = $a;
+		} else {
+			#print "Push new option: $m\n";
+			push(@options,$m);
+		}
+	}
+	$prev_maxopts = $maxopts;
+	$maxopts = $#options+1;
+	&widget_setup;
+
+	# Keep history on which menu options were selected for going back
+	if( $was_cancelled ) {
+		$selected = pop(@select_path);
+	} elsif( ! ($reset_selected == 1) ) {
+		$selected = pop(@select_path);
+	} else {
+		push(@select_path, $selected);
+		$selected = 1;
+	}
+	$prev_menu = $menu;
+	
+	# save this to use it after a system reboot
+	$vars{LASTMENU} = $menu;
+}
+#-------------------------------------------------------------------------------
+sub get_input
+{
+	my $prompt = $_[0];
+	my $type = 'h';	# default is hostname type input
+	if( $prompt =~ /^(\S+?):(.*)/ ) {
+		$type = $1;
+		$prompt = $2;
+	}
+
+	# Was there a default value here?
+	my $default_val = '';
+	if( $type =~ /^(\w)(\S+)/ ) {	# Yes there was.
+		$type = $1;
+		$default_val = $2;
+	}
+	print "get_input type $type with prompt: $prompt\n" if($debug);
+	print "get_input: default: $default_val\n" if($debug);
+
+	$prev_maxopts = $maxopts;
+	$maxopts = $height;
+	&widget_setup;
+
+	my $done = 0;
+	my $col = 1;	# Starting positions for input
+	my $row = 2;	# Need these to keep track of the edges of the screen
+	my $logical_row = $row;	# For when we run over the number of physical rows
+	my @charset = @alphaset;
+	@charset = @numset if( $type eq 'i' );
+	my $char = 0;
+	$char = 1 if( $type eq 'i' );	# Can't start ip's with a 0.
+	my @result = ();	# The row of characters presently being worked on
+	my @result_rows = ();	# Combination of all results
+
+	if( $default_val ne '' ) {	# Have a default input here
+		foreach my $ch (split(//,$default_val))
+		{
+			# Most of this code is repeated below...but thats life...
+			if( $col < $width ) {
+				$col++;
+			} else {			# wrap to next row
+				$col = 1;
+				$logical_row++;
+				push(@result_rows, join('',@result));
+				if( $row < $height ) {
+					$row++;
+				} else {	# Need some trickiness here...
+					# Cycle back through physical rows and scroll input so far
+					my $c = 0;
+					for( my $i=($height-1); $i>0; $i-- ) {
+						my $s = $result_rows[$#result_rows-$c];
+						print $remote "widget_set $menuscreen $i 1 $i {$s}\n";
+						$c++;
+					}
+				}
+				@result = ();
+			}
+			push(@result, $ch);
+			my $string = join('',@result);
+			print $remote "widget_set $menuscreen $row 1 $row {$string}\n";
+			print $remote "cursor_position $col $row\n";	# Flashing input cursor
+		} 
+		# Now make our active character whatever the last one in the
+		# default input was.
+		for( my $c=0; $c<=$#charset; $c++ )
+		{
+			$char = $c if( $result[$#result] eq $charset[$c] );
+		}
+	} else {
+		push(@result, $charset[$char]);
+	}
+
+	print $remote "widget_set $menuscreen 1 1 1 {$prompt}\n";
+
+	# Set up flashing input cursor
+	print $remote "cursor_position $col $row\n";
+	print $remote "cursorblink on\n";
+
+	while( $done == 0 )
+	{
+		while(defined(my $line = <$remote>)) {
+			next if( $line =~ /^listen/ );
+			next if( $line =~ /^ignore/ );
+			print "get_input: $line" if($debug);
+
+			if( $line =~ /^key\s(\w)/ ) {
+				my $k = $1;
+				my $f = $key{$k};
+				if( $f eq 'up' ) {
+					$char = ($char < $#charset) ? $char + 1 : 0;	# wrap around
+					$result[$#result] = $charset[$char];		# Assign character
+					my $string = join('',@result);
+					print $remote "widget_set $menuscreen $row 1 $row {$string}\n";
+				} elsif( $f eq 'down' ) {
+					$char = ($char > 0) ? $char - 1 : $#charset;	# wrap around
+					$result[$#result] = $charset[$char];		# Assign character
+					my $string = join('',@result);
+					print $remote "widget_set $menuscreen $row 1 $row {$string}\n";
+				} elsif( $f eq 'right' ) {
+					if( $col < $width ) {
+						$col++;
+					} else {			# wrap to next row
+						$col = 1;
+						$logical_row++;
+						push(@result_rows, join('',@result));
+						if( $row < $height ) {
+							$row++;
+						} else {	# Need some trickiness here...
+							# Cycle back through physical rows and scroll input so far
+							my $c = 0;
+							for( my $i=($height-1); $i>0; $i-- ) {
+								my $s = $result_rows[$#result_rows-$c];
+								print $remote "widget_set $menuscreen $i 1 $i {$s}\n";
+								$c++;
+							}
+						}
+						@result = ();
+					}
+					push(@result, $charset[$char]);
+					my $string = join('',@result);
+					print $remote "widget_set $menuscreen $row 1 $row {$string}\n";
+					print $remote "cursor_position $col $row\n";	# Flashing input cursor
+				} elsif( $f eq 'left' ) {
+					if( $col > 1 ) {
+						$col--;
+						pop(@result);
+					} elsif( $logical_row > $height ) {
+						$logical_row--;
+						$col = $width;
+						@result = split(//, pop(@result_rows));
+						# Cycle back through physical rows and scroll input so far
+						my $c = 0;
+						my $stop = ($logical_row == $height) ? 1 : 0;	# Need to redraw prompt
+						for( my $i=($height-1); $i>$stop; $i-- ) {
+							my $s = $result_rows[$#result_rows-$c];
+							print $remote "widget_set $menuscreen $i 1 $i {$s}\n";
+							$c++;
+						}
+						print $remote "widget_set $menuscreen 1 1 1 {$prompt}\n" if( $stop == 1 );
+					} elsif($row > 2) {
+						# Wipe the row we're leaving behind
+						print $remote "widget_set $menuscreen $row 1 $row {$blanks}\n";
+						$row--;
+						$col = $width;
+						@result = split(//, pop(@result_rows));
+					}
+					my $string = join('',@result);
+					print $remote "widget_set $menuscreen $row 1 $row {$string}\n";
+					print $remote "cursor_position $col $row\n";	# Flashing input cursor
+				} elsif( $f eq 'go' ) {
+					$done = 1;
+				} elsif( $f eq 'cancel' ) {
+					$done = 1;
+					$was_cancelled = 1;
+				} else {
+					print "Unknown function: $k ($f)\n" if($debug);
+				}
+			}
+		}
+	}
+	push(@result_rows, join('',@result));
+	print $remote "cursorblink off\n";
+	print $remote "cursor_position 1 1\n";	# Reset the cursor
+	return( join('',@result_rows) );
+}
+#-------------------------------------------------------------------------------
+sub init_menus
+{
+	open(CONFIG, "< $menus_file") || die "Unable to open config file '$menus_file': $!\n";
+	while( my $line = <CONFIG> )
+	{
+		chomp $line;
+		next if( $line =~ /^$/ );	# Blank lines
+		next if( $line =~ /^#/ );	# Comment
+
+		my ($name,$value) = split(/:/, $line, 2);
+		if( $name eq '_default' ) {
+			my ($n,$v) = split(/==/, $value, 2);
+			$defaults{$n} = $v;
+		}
+		elsif( defined($menus{$name}) ) {
+			$menus{$name} = "$menus{$name}\n$value";
+		} else {
+			$menus{$name} = $value;
+		}
+	}
+	close(CONFIG);
+
+	if( $debug )
+	{
+		print "Menu Entries:\n";
+		foreach my $m (keys %menus)
+		{
+			print "$m: $menus{$m}\n";
+		}
+	}
+	if( !defined $menus{'Main'} ) {
+		die "Menu 'Main' not found. Unable to start without it.\n";
+	}
+}
+#-------------------------------------------------------------------------------
+sub show_temp_screen
+{
+	my $msg = $_[0];
+
+	my @lines = split(/\n/, $msg, $height);
+
+	$prev_maxopts = $maxopts;
+	$maxopts = $height;
+	&widget_setup;
+	my $num = 1;
+	foreach my $l (@lines)
+	{
+		print $remote "widget_set $menuscreen $num 1 $num {$l}\n";
+		$num++;
+	}
+	sleep(2);
+}
+#-------------------------------------------------------------------------------
+sub switch_gpo
+{
+	my ($gpo,$status) = @_;
+	my $cmd = ($status == 1) ? "output $gpo on" : "output $gpo off";
+	print $remote "$cmd\n";
+}
+#-------------------------------------------------------------------------------
+sub choose_option
+{
+	my $line = $_[0];
+	my $action = '!!Config Error!!==^nop';
+	my @ops = split(/\?\?/, $line);
+	# Run through each option. The first with a matching condition
+	# will be run. If none match, the first with no condition specified will run.
+	foreach my $o (@ops)
+	{
+		if( $o =~ /^{(.*?)\?(.*?)}(.*)/ )
+		{
+			my($prog,$cond,$act) = ($1,$2,$3);
+			#print "Comparing >$prog< with >$cond< for option ($act)\n";
+			if( $prog !~ /^\// )	# Absolute path
+			{
+				$prog = $defaults{'exepath'} . $prog;
+			}
+			my $rc = `$prog`;
+			return($action) if( $rc eq '' );	# Error...
+			chomp($rc);
+			if( eval( $rc . $cond ) )	# Condition matches
+			{
+				return($act);
+			}
+		} 
+		else 
+		# No condition, accept this option
+		{
+			return($o);
+		}
+	}
+	# Something wrong if we get here...
+	return($action);
+}
+#-------------------------------------------------------------------------------
+sub set_variables
+{
+	my $vars = $_[0];
+	my @pairs = split(/\&/, $vars);
+	foreach my $p (@pairs)
+	{
+		my ($n,$v) = split(/=/, $p);
+		$vars{$n} = $v;
+	}
+
+	if( $debug )
+	{
+		print "Variables now:\n";
+		foreach my $i (keys %vars)
+		{
+			print "$i = $vars{$i}\n";
+		}
+	}
+}
+#-------------------------------------------------------------------------------
+sub init_inputs_dynamic () 
+{
+    my %NetworkInfo = ();
+    
+    %NetworkInfo = get_network_settings();
+    
+    $vars{IP} =  $NetworkInfo{ip};
+    $vars{NETMASK} = $NetworkInfo{netmask};
+    $vars{GATEWAY} = $NetworkInfo{gateway};
+    $vars{FQDN} = $NetworkInfo{hostname};
+    $vars{DNS1} = $NetworkInfo{dns1};
+    $vars{DNS2} = $NetworkInfo{dns2} if $NetworkInfo{dns2};
+    $vars{LASTMENU} = "Main";
+    $vars{LASTACTION} = undef;
+}
+#-------------------------------------------------------------------------------
+sub init_inputs
+{
+	my $arg = $_[0];
+
+	return if( $arg == 0 );
+	if ( -f $vars_file) {
+	    open(INPUT, "< $vars_file") || warn "Can't read inputs file '$vars_file': ($!\n";
+	    while( my $line = <INPUT> )
+	    {
+		chomp $line;
+		my ($n,$v) = split(/=/, $line);
+		$vars{$n} = $v;
+		print "init_inputs: $n = $vars{$n}\n" if($debug);
+	    }
+	    close(INPUT);
+	} else {
+	    init_inputs_dynamic();
+	}
+}
+#-------------------------------------------------------------------------------
+# This function was a test...it's not used.
+#-------------------------------------------------------------------------------
+sub get_keypress
+{
+	while( defined(my $line = <$remote>))
+	{
+	return 'nop' if( $line =~ /^listen/ );
+	return 'nop' if( $line =~ /^ignore/ );
+
+	if( $line =~ /^key\s(\w)/ ) {
+		my $k = $1;
+		if( defined $key{$k} ) {
+			return $key{$k};
+		} else {
+			print "Unknown Key: $k\n" if($debug);
+			return 'na';
+		}
+	}
+	}
+	return 'nop';
+}
+#-------------------------------------------------------------------------------
+sub tail_file()
+{
+	my $filename = $_[0];
+	
+	# Numlines, file, ref to buffer
+	sub tail_file_get_last_lines ($$$) 
+	{
+
+	    my $NUMLINES = shift;
+	    my $FILE = shift;
+	    my $abuffer = shift;
+    
+	    my $BUFSIZE = 256;
+	    my $HEURISTIC = 1;
+
+	    my $nrline = $NUMLINES;
+	    my $cpos = -$BUFSIZE;
+	    my $tmpbuf;
+    
+	    my $bread = 0;
+	    my $found = 0;
+	    
+	    if (! $FILE) { die("Must supply a file name to tail it\n"); }
+	    if (! -e $FILE) { die("File: $FILE doesn't exist.\n"); }
+    
+	    sysopen (LOGFILE, "$FILE", O_RDONLY | O_NONBLOCK) || die("Cannot open file: $FILE\n");
+	    seek (LOGFILE, 0, 2);
+	    
+	    do {
+		my $lastpos = 0;
+		my $bpos = 0;
+		$cpos -= $bread;
+		seek (LOGFILE, $cpos, 2);
+		$bread = read(LOGFILE, $tmpbuf, $BUFSIZE);
+		$tmpbuf = reverse($tmpbuf);
+		
+		while ( $tmpbuf =~ m/\n/g && $nrline >= 0) {
+		    $bpos = pos($tmpbuf);
+		    if ( $bpos != $lastpos ) {
+			$abuffer->[$nrline] .= substr ($tmpbuf, $lastpos, $bpos - $lastpos - 1);
+			$abuffer->[$nrline] = reverse($abuffer->[$nrline]);
+			$nrline--;
+			$lastpos = $bpos;
+		    }
+		}
+    
+		if ($nrline >= 0 && $bpos < $BUFSIZE ) {
+		    $abuffer->[$nrline] .= substr ($tmpbuf, $lastpos, $BUFSIZE);
+		    # Can increase buffer here to optimise if we fail to get a line
+		    if ($HEURISTIC) {
+			$BUFSIZE += 64;
+		    }
+		}
+
+	    } while ($nrline >= 0);
+	close(LOGFILE);
+    }
+    
+    # string, start, num chars
+    sub tail_file_get_substring($$$)
+    {
+	my ( $string, $start, $chars) = @_;
+	my $tmpstr = " ";
+    
+	if ( $start < 0 || $chars < 0) {
+	    return $tmpstr;
+	}
+    
+	if ($start < length($string)) {
+	    $tmpstr = substr ($string, $start, $chars);
+	    # remove { and } because of LCDd problems;
+	    $tmpstr =~ s/\}|\{//g;
+	}
+	return $tmpstr;
+    }
+	
+
+    # Set up some screen widgets...
+    &widget_setup;
+
+    # These define the visible part of the file...
+    my $top = $height;    # How far from the end of the file should we start?
+    my $lines = $height;  # How many lines to display?
+    my $start = 0;   # Left/right scrolling position,
+
+    my $slow = 1;   # Should we pause after the current frame?
+
+    # Forever, we should do stuff...
+    my $done = 0;
+    
+    while( $done == 0 )
+    {
+	my $action = get_keypress();
+	if($action ne "nop")  { $slow = -10; }
+	if($action eq "up") { $top++; }
+	if($action eq "down")
+	{
+	    if($top > $lines) {$top--; }
+	}
+	if($action eq "right") { $start++; }
+	if($action eq "left")
+	{
+	    if($start > 0) {$start--; }
+	}
+	if($action eq "cancel") {$done = 1; last; }
+	if($action eq "go") {$top = $height; }	# Back to bottom
+	# Now, show what the file contains, if anything...
+	if( -e $filename )
+	{
+	    # Grab some text.
+	    my $chars = $start + $width;
+	    my @lines = ();
+	    my $line;
+	    tail_file_get_last_lines($top, $filename, \@lines);
+	    $line = tail_file_get_substring($lines[0], $start, $width);
+	    print "$lines[0]\n" if $debug;
+	    print $remote "widget_set $menuscreen 1 1 1 {$line }\n";
+	    $line = tail_file_get_substring($lines[1], $start, $width);
+	    print "$lines[1]\n" if $debug;
+	    print $remote "widget_set $menuscreen 2 1 2 {$line }\n";
+	}
+	else  # If the file is unreadable, show an error
+	{
+	    &show_temp_screen("Error reading file:\n$filename");
+	    $done = 1;
+	}
+
+	# And wait a little while before we show stuff again.
+	if($slow > 40) {sleep 4; $slow++; print "Slowing: $slow" if $debug;}
+	elsif($slow > 10) {sleep 1; $slow++; print "Slowing: $slow" if $debug;}
+	elsif($slow > 0) {select(undef, undef, undef, 0.50); $slow++; print "Slowing: $slow" if $debug;}
+	else {$slow++;}
+	# The "slow" thing just lets us have a better response time
+	# while the user is pressing keys...  But while the user
+	# is inactive, it gradually decreases update frequency.
+    }
+}
+#-------------------------------------------------------------------------------
+sub write_inputs()
+{
+	open(INPUTS,">$vars_file") || die "Unable to write to inputs file $vars_file: $!\n";
+	foreach my $i (keys %vars)
+	{
+		print INPUTS "$i=$vars{$i}\n";
+	}
+	close(INPUTS);
+}
+#-------------------------------------------------------------------------------
+sub get_network_settings() {
+	
+	my %NetworkInfo = ();
+	
+	my $resolv_path = "/etc/resolv.conf";
+	my $network_path = "/etc/config/network";
+	my $eth_path = "/etc/config/ifcfg-eth0";	
+	
+	# used in split context
+	my $garbage = "";
+	
+	# fetch hostname and gateway from etc/configs/network file
+	# is not found use some defaults
+	my ($hostname,$gateway);
+
+	if ( open(NETWORK,$network_path) ) {
+		while (<NETWORK>) {
+			# skip commented lines		
+			next if ( $_ =~ /^(.*\#+)(.*\s+)(\S+).*/ );		
+	    	if (/HOSTNAME/i) {
+				($garbage,$hostname) = split /=/;
+				#strip white spaces
+				$hostname=~s/^\s+//;
+				$hostname=~s/\s+$//;
+				next;
+			}
+	    	if (/GATEWAY/i) {
+				($garbage,$gateway) = split /=/;
+				#strip white spaces
+				$gateway=~s/^\s+//;
+				$gateway=~s/\s+$//;
+				next;
+			}
+		}	
+	}else {
+		print "Could not open $network_path:$!\n" if $debug;	
+	}
+
+	if ( !$hostname ) {
+		print "Hostname not found ... using default!\n" if $debug;
+		$hostname = "imedia.your.domain";
+	}
+	if ( !$gateway ) {
+		print "Gateway not found ... using default!\n" if $debug;
+		$gateway = "192.168.0.1";
+	}
+	close (NETWORK);
+	
+
+	# fetch interface details from etc/configs/ifcfg-eth0 file
+	# is not found use some defaults
+	my ($ip,$broadcast,$netmask);
+
+	if ( open(ETH0,$eth_path) ) {
+		while (<ETH0>) {
+			# skip commented lines		
+			next if ( $_ =~ /^(.*\#+)(.*\s+)(\S+).*/ );		
+	    	if (/IPADDR/i) {
+				($garbage,$ip) = split /=/;
+				#strip white spaces
+				$ip=~s/^\s+//;
+				$ip=~s/\s+$//;
+				next;
+			}
+	    	if (/NETMASK/i) {
+				($garbage,$netmask) = split /=/;
+				#strip white spaces
+				$netmask=~s/^\s+//;
+				$netmask=~s/\s+$//;
+				next;
+			}
+	    	if (/BROADCAST/i) {
+				($garbage,$broadcast) = split /=/;
+				#strip white spaces
+				$broadcast=~s/^\s+//;
+				$broadcast=~s/\s+$//;
+				next;
+			}
+		}	
+	}else {
+		print "Could not open $eth_path:$!\n" if $debug;	
+	}
+
+	if ( !$ip ) {
+		print "Cannot get IP ... using default!\n" if $debug;
+		$ip = "192.168.0.2";
+	}
+	if ( !$netmask ) {
+		print "Cannot get NETMASK ... using default!\n" if $debug;
+		$netmask = "255.255.255.0";
+	}
+	if ( !$broadcast ) {
+		print "Cannot get BROADCAST ... using default!\n" if $debug;
+		$broadcast = "192.168.0.255";
+	}
+	
+	close (ETH0);
+	
+	# fetch dnsservers from etc/resolv.conf file
+	# is not found use some defaults
+	my @ns = ();
+    if ( open(RESOLV,$resolv_path) ) {
+		my $i = 0;
+		while (<RESOLV>) {
+			# skip commented lines
+			next if ( $_ =~ /^(.*\#+)(.*\s+)(\S+).*/ );
+	    	if (/nameserver\s+(\S+)/) { 
+			$ns[$i]=$1;
+			#strip white spaces
+			$ns[$i]=~s/^\s+//;
+			$ns[$i]=~s/\s+$//;
+			$i++;
+	    	}
+		};
+	} else {
+		print "Could not open $resolv_path:$!\n" if $debug;
+		
+		# only if resolv.conf could not be opened put some 
+		# defaults ( in this case suppose we are in install mode
+		# otherwise means that user don't want to use nameservers
+		if (!$ns[0]) { $ns[0] = "ns1.your.domain"; }
+		if (!$ns[1]) { $ns[1] = "ns2.your.domain"; }
+	}
+	
+	
+    close (RESOLV);
+
+    $NetworkInfo{hostname} = $hostname;
+    $NetworkInfo{ip} = $ip;
+    $NetworkInfo{broadcast} = $broadcast;
+    $NetworkInfo{netmask} = $netmask;
+    $NetworkInfo{dns1} = $ns[0];
+    $NetworkInfo{dns2} = $ns[1];	
+    $NetworkInfo{gateway} = $gateway;	
+	
+    return %NetworkInfo;
+}
+#-------------------------------------------------------------------------------
+sub put_network_settings($) {
+
+    my $NetworkInfo = shift;
+    my $MountPoint = "/";
+	
+    foreach my $key (keys %{$NetworkInfo} ) {
+	# nameservers and gateway are not a must
+	next if ( $key eq "dns1" || $key eq "dns2" || $key eq "gateway" );
+	return (0,"Network settings incomplete") if (!${$NetworkInfo}{$key});
+    }
+	
+    ${$NetworkInfo}{dns1} = "" if ( ! ${$NetworkInfo}{dns1} );
+    ${$NetworkInfo}{dns2} = "" if ( ! ${$NetworkInfo}{dns2} );	
+    ${$NetworkInfo}{gateway} = "" if ( ! ${$NetworkInfo}{gateway} );	
+	
+    my $resolv_path = $MountPoint."etc/resolv.conf";
+    my $hosts_path = $MountPoint."etc/hosts";
+    my $eth0_path = $MountPoint."etc/config/ifcfg-eth0";
+    my $network_path = $MountPoint."etc/config/network";
+	
+    my $DEBUG = 0;
+    my $ExitCode=1;
+    
+    my $host;
+    my $domain;
+	
+    # If this fails it might mean that user has entered only a hostname
+    if (${$NetworkInfo}{hostname} !~ /(\w+)\.(\S+)/m) {
+	$host = ${$NetworkInfo}{hostname};
+	$domain = "";
+    } else {
+	$host = $1;
+	$host =~ s/\.//;
+	$domain = $2;
+    }
+
+    # write hosts file    
+    if (open (HOSTS,">$hosts_path")) {
+	print HOSTS	"127.0.0.1\t\tlocalhost loopback\n".
+			"${$NetworkInfo}{ip}\t$host\t${$NetworkInfo}{hostname}";
+	close(HOSTS);
+    } else { 
+	return (0,"Couldn't open $hosts_path :$!");
+    }
+	
+    # write resolv.conf file
+    # if after a nameserver follows a blank is corrent
+    # in case user didn't specified any ns
+    if (open(RESOLV, ">$resolv_path")) {
+	print RESOLV	"domain $domain\n"."search $domain\n";
+	print RESOLV	"nameserver ${$NetworkInfo}{dns1}\n" if ( ${$NetworkInfo}{dns1} );
+	print RESOLV	"nameserver ${$NetworkInfo}{dns2}" if ( ${$NetworkInfo}{dns2} );
+	close RESOLV;
+    } else {
+	return (0,"Couldn't open $resolv_path :$!");
+    }
+	
+    # write network adapter config file
+    if (open (ETH0, ">$eth0_path")) {
+	print ETH0	"DEVICE=eth0".
+			"\nIPADDR=${$NetworkInfo}{ip}".
+			"\nNETMASK=${$NetworkInfo}{netmask}".
+			"\nBROADCAST=${$NetworkInfo}{broadcast}";
+       close (ETH0);
+    } else { 
+	return(0,"Couldn't open $eth0_path :$!");
+    }
+	
+    # write network setting
+    if (open (NETWORK,">$network_path")) {
+	print NETWORK	"NETWORKING=yes\n".
+			"FORWARD_IPV4=yes\n".
+			"DEFRAG_IPV4=no\n".
+			"HOSTNAME=${$NetworkInfo}{hostname}\n".
+			"GATEWAY=${$NetworkInfo}{gateway}";
+ 	close (NETWORK);
+    } else { 
+	return (0,"Couldn't open $network_path :$!");
+    }
+
+    return $ExitCode;
+}
+#-------------------------------------------------------------------------------
+sub lcd_set_ip()
+{
+    my $param = shift;
+    print ("--------------------------------------->ENTERED: $param\n") if $debug;
+    $vars{IP} =  $param;
+}
+
+sub lcd_set_netmask()
+{
+    my $param = shift;
+    print ("--------------------------------------->ENTERED: $param\n") if $debug;
+    $vars{NETMASK} = $param
+}
+
+sub lcd_set_gateway()
+{
+    my $param = shift;
+    print ("--------------------------------------->ENTERED: $param\n") if $debug;
+    $vars{GATEWAY} = $param;
+
+}
+
+sub lcd_set_hostname()
+{
+    my $param = shift;
+    print ("--------------------------------------->ENTERED: $param\n") if $debug;
+    $vars{FQDN} = $param;
+
+}
+
+sub lcd_set_dns1()
+{
+    my $param = shift;
+    print ("--------------------------------------->ENTERED: $param\n") if $debug;
+    $vars{DNS1} = $param;
+}
+
+sub lcd_set_dns2()
+{
+    my $param = shift;
+    print ("--------------------------------------->ENTERED: $param\n") if $debug;
+    $vars{DNS2} = $param;
+}
+
+sub lcd_activate_network_changes()
+{
+
+    my %NetworkInfo = ();
+    
+    print ("Activating network changes\n");
+    
+    $NetworkInfo{hostname} = $vars{FQDN}; 
+    $NetworkInfo{ip} = $vars{IP};
+    $NetworkInfo{netmask} =  $vars{NETMASK};
+    $NetworkInfo{dns1} =  $vars{DNS1};
+    $NetworkInfo{dns2} =  $vars{DNS2};
+    $NetworkInfo{gateway} =  $vars{GATEWAY};
+    
+    put_network_settings(\%NetworkInfo);
+
+}

@@ -1,0 +1,6 @@
+This script requires:
+
+ImageMagick-devel
+GhostScript
+GhostScripts-fonts
+MIME::Entity from MIME-Tools package

@@ -1,0 +1,142 @@
+diff -urN bttv-0.9.13/bttv-cards.c bttv-0.9.13-imedia/bttv-cards.c
+--- bttv-0.9.13/bttv-cards.c	2004-02-23 17:39:53.000000000 +0200
++++ bttv-0.9.13-imedia/bttv-cards.c	2004-08-20 13:59:34.000000000 +0300
+@@ -272,7 +272,10 @@
+ 	{ 0xa0fca1a0, BTTV_ZOLTRIX,       "Face to Face Tvmax" },
+ 	{ 0x20007063, BTTV_PC_HDTV,       "pcHDTV HD-2000 TV"},
+ 	{ 0x82b2aa6a, BTTV_SIMUS_GVC1100, "SIMUS GVC1100" },
+-	{ 0x146caa0c, BTTV_PV951,         "ituner spectra8" },
++	{ 0x146caa0c, BTTV_PV951,         "iTuner Spectra8" },
++	{ 0x146daa0d, BTTV_PV951,         "iTuner Spectra8" },
++	{ 0x146eaa0e, BTTV_PV951,         "iTuner Spectra8" },
++	{ 0x146faa0f, BTTV_PV951,         "iTuner Spectra8" },
+ 
+ 	{ 0x40111554, BTTV_PV_BT878P_9B,  "Prolink Pixelview PV-BT" },
+ 	{ 0x17de0a01, BTTV_KWORLD,        "Mecer TV/FM/Video Tuner" },
+diff -urN bttv-0.9.13/bttv-firmware.c bttv-0.9.13-imedia/bttv-firmware.c
+--- bttv-0.9.13/bttv-firmware.c	1970-01-01 02:00:00.000000000 +0200
++++ bttv-0.9.13-imedia/bttv-firmware.c	2003-10-31 11:47:40.000000000 +0200
+@@ -0,0 +1,78 @@
++#define __KERNEL_SYSCALLS__
++#include <linux/module.h>
++#include <linux/fs.h>
++#include <linux/mm.h>
++#include <linux/slab.h>
++#include <linux/unistd.h>
++#include <linux/vmalloc.h>
++#include <asm/uaccess.h>
++
++static int errno;
++static int do_mod_firmware_load(const char *fn, char **fp)
++{
++	int fd;
++	long l;
++	char *dp;
++
++	fd = open(fn, 0, 0);
++	if (fd == -1)
++	{
++		printk(KERN_INFO "Unable to load '%s'.\n", fn);
++		return 0;
++	}
++	l = lseek(fd, 0L, 2);
++	if (l <= 0 || l > 131072)
++	{
++		printk(KERN_INFO "Invalid firmware '%s'\n", fn);
++		sys_close(fd);
++		return 0;
++	}
++	lseek(fd, 0L, 0);
++	dp = vmalloc(l);
++	if (dp == NULL)
++	{
++		printk(KERN_INFO "Out of memory loading '%s'.\n", fn);
++		sys_close(fd);
++		return 0;
++	}
++	if (read(fd, dp, l) != l)
++	{
++		printk(KERN_INFO "Failed to read '%s'.\n", fn);
++		vfree(dp);
++		sys_close(fd);
++		return 0;
++	}
++	close(fd);
++	*fp = dp;
++	return (int) l;
++}
++
++/**
++ *	mod_firmware_load - load sound driver firmware
++ *	@fn: filename
++ *	@fp: return for the buffer.
++ *
++ *	Load the firmware for a sound module (up to 128K) into a buffer.
++ *	The buffer is returned in *fp. It is allocated with vmalloc so is
++ *	virtually linear and not DMAable. The caller should free it with
++ *	vfree when finished.
++ *
++ *	The length of the buffer is returned on a successful load, the
++ *	value zero on a failure.
++ *
++ *	Caution: This API is not recommended. Firmware should be loaded via
++ *	an ioctl call and a setup application. This function may disappear
++ *	in future.
++ */
++ 
++int mod_firmware_load(const char *fn, char **fp)
++{
++	int r;
++	mm_segment_t fs = get_fs();
++
++	set_fs(get_ds());
++	r = do_mod_firmware_load(fn, fp);
++	set_fs(fs);
++	return r;
++}
++
+diff -urN bttv-0.9.13/bttv-i2c.c bttv-0.9.13-imedia/bttv-i2c.c
+--- bttv-0.9.13/bttv-i2c.c	2004-02-22 03:59:35.000000000 +0200
++++ bttv-0.9.13-imedia/bttv-i2c.c	2006-03-01 13:42:19.000000000 +0200
+@@ -103,7 +103,7 @@
+ 
+ static struct i2c_adapter bttv_i2c_adap_sw_template = {
+ #ifdef I2C_PEC
+-	.owner             = THIS_MODULE,
++//	.owner             = THIS_MODULE,
+ #else
+ 	.inc_use           = bttv_inc_use,
+ 	.dec_use           = bttv_dec_use,
+@@ -286,7 +286,7 @@
+ 
+ static struct i2c_adapter bttv_i2c_adap_hw_template = {
+ #ifdef I2C_PEC
+-	.owner         = THIS_MODULE,
++//	.owner         = THIS_MODULE,
+ #else
+ 	.inc_use       = bttv_inc_use,
+ 	.dec_use       = bttv_dec_use,
+diff -urN bttv-0.9.13/Makefile bttv-0.9.13-imedia/Makefile
+--- bttv-0.9.13/Makefile	2004-02-24 13:15:09.000000000 +0200
++++ bttv-0.9.13-imedia/Makefile	2004-03-10 12:59:44.000000000 +0200
+@@ -17,7 +17,7 @@
+ 
+ # drivers objects
+ bttv-objs	:= bttv-driver.o bttv-cards.o bttv-risc.o bttv-if.o \
+-		   bttv-vbi.o bttv-i2c.o
++		   bttv-vbi.o bttv-i2c.o bttv-firmware.o
+ saa7134-objs    := saa7134-core.o saa7134-i2c.o saa7134-video.o \
+ 		   saa7134-vbi.o saa7134-tvaudio.o saa7134-oss.o \
+ 		   saa7134-cards.o saa7134-ts.o
+diff -urN bttv-0.9.13/tvmixer.c bttv-0.9.13-imedia/tvmixer.c
+--- bttv-0.9.13/tvmixer.c	2004-02-22 03:59:35.000000000 +0200
++++ bttv-0.9.13-imedia/tvmixer.c	2006-03-01 13:42:11.000000000 +0200
+@@ -235,7 +235,7 @@
+ 
+ static struct i2c_driver driver = {
+ #ifdef I2C_PEC
+-	.owner           = THIS_MODULE,
++//	.owner           = THIS_MODULE,
+ #endif
+ 	.name            = "tv card mixer driver",
+         .id              = I2C_DRIVERID_TVMIXER,

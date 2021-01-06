@@ -1,0 +1,18 @@
+function pop3_allow ()
+{
+
+	for i in $ALLOW_POP3; do
+		for j in $ALLOW_POP3_FROM; do
+
+		iptables -A FORWARD -p tcp -s $j --sport $UNPRIVPORTS -d $i \
+			 --dport 110 -m state --state NEW -j ACCEPT
+		done
+	done
+		
+	echo "pop3"
+}
+
+function MODULE_EXPORT ()
+{
+	pop3_allow
+}

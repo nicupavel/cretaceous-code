@@ -1,0 +1,15 @@
+#Config for via epia minibox lcd keypad
+G=up
+I=down
+H=left
+Q=right
+L=go
+B=cancel
+C=plus
+J=minus
+O=f1
+T=f2
+E=f3
+D=f4
+S=f5
+N=f6

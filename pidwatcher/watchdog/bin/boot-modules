@@ -1,0 +1,67 @@
+#!/usr/bin/perl
+#-----------------------------------------------------------------------------
+# Debugging and code safe-quard support
+#-----------------------------------------------------------------------------
+# !!! FOR USING IN A PRODUCTION ENVIRONMENT COMMENT THE FOLLOWING 3 LINES !!!
+# !!! AND UNCOMMENT THE NEXT 2 !!!
+#-----------------------------------------------------------------------------
+#use warnings;
+#use strict;
+#use diagnostics;
+
+no  warnings;
+no  strict;
+
+my  $DEBUG = 0;
+
+#-----------------------------------------------------------------------------
+# Library includes
+#-----------------------------------------------------------------------------
+
+#-----------------------------------------------------------------------------
+# Global constants
+#-----------------------------------------------------------------------------
+my $CRON_DIR 			= "/mediabox/webadmin/job-control";
+my $CRON_BIN_DIR 		= "$CRON_DIR/bin";
+my $CRON_MODULES_DIR 		= "$CRON_DIR/modules";
+my $STARTED_MODULES_FILE	= "$CRON_MODULES_DIR/started.conf";
+
+#-----------------------------------------------------------------------------
+# 'main()' subroutine
+#-----------------------------------------------------------------------------
+
+#-----------------------------------------------------------------------------
+# Remove all temporary "*.pid" , "*.lock" and "*.stdout" files
+# that may be left by some modules started within previous session
+# (before the last reboot)
+#
+# Note that "*.status" files are needed for logging purposes and
+# "*.params" files are needed to automatically restart  the 
+# previously running modules
+#-----------------------------------------------------------------------------
+unlink <$CRON_MODULES_DIR/*.pid>;
+unlink <$CRON_MODULES_DIR/*.lock>;
+unlink <$CRON_MODULES_DIR/*.stdout>;
+
+my $ModuleName;
+my $ModuleParamsFile;
+if (open(STARTED_MODULES, "< $STARTED_MODULES_FILE")) {
+    while (<STARTED_MODULES>) {
+	chomp();
+	$ModuleName = $_;
+	
+	if ($ModuleName) {
+	    # Because there are situations when some modules may depend
+	    # on some other parent modules (previously started), we must wait
+	    # a bit for these parents initialize themselves before starting
+	    # the dependent modules
+	    sleep(5);
+	
+	    # Start the current module found
+	    system("/usr/bin/setsid \"$CRON_BIN_DIR/startmodule\" ". $ModuleName ." &");
+	}
+    }
+        close(STARTED_MODULES);
+}
+    
+

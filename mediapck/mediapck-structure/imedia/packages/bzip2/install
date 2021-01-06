@@ -1,0 +1,7 @@
+#!/bin/bash
+
+rm $0
+echo "Performing Install ..."
+cp -Raf * /
+cd ..
+echo "Done..."

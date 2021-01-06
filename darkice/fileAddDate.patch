@@ -1,0 +1,174 @@
+diff -ub --exclude=Makefile darkice-0.12/src/DarkIce.cpp darkice-0.12-mediabox/src/DarkIce.cpp
+--- darkice-0.12/src/DarkIce.cpp	Sat Oct 26 17:38:30 2002
++++ darkice-0.12-mediabox/src/DarkIce.cpp	Tue Nov 19 13:54:05 2002
+@@ -220,6 +220,7 @@
+         int                         highpass        = 0;
+         const char                * localDumpName   = 0;
+         FileSink                  * localDumpFile   = 0;
++	bool			    fileAddDate     = false;
+ 
+         str         = cs->get( "sampleRate");
+         sampleRate  = str ? Util::strToL( str) : dsp->getSampleRate();
+@@ -282,6 +283,8 @@
+         lowpass     = str ? Util::strToL( str) : 0;
+         str         = cs->get( "highpass");
+         highpass    = str ? Util::strToL( str) : 0;
++	str	    = cs->get("fileAddDate");
++	fileAddDate = str ? (Util::strEq( str, "yes") ? true : false) : false;
+ 
+         localDumpName = cs->get( "localDumpFile");
+ 
+@@ -289,6 +292,10 @@
+ 
+         // check for and create the local dump file if needed
+         if ( localDumpName != 0 ) {
++	
++	    if (fileAddDate)
++		localDumpName = Util::fileAddDate(localDumpName);
++		
+             localDumpFile = new FileSink( localDumpName);
+             if ( !localDumpFile->exists() ) {
+                 if ( !localDumpFile->create() ) {
+@@ -298,7 +305,6 @@
+                 }
+             }
+         }
+-
+         // streaming related stuff
+         audioOuts[u].socket = new TcpSocket( server, port);
+         audioOuts[u].server = new IceCast( audioOuts[u].socket.get(),
+@@ -375,6 +381,7 @@
+         bool                        isPublic        = false;
+         const char                * localDumpName   = 0;
+         FileSink                  * localDumpFile   = 0;
++	bool                        fileAddDate     = false;
+ 
+         str         = cs->getForSure( "format", " missing in section ", stream);
+         if ( Util::strEq( str, "vorbis") ) {
+@@ -439,12 +446,19 @@
+         genre       = cs->get( "genre");
+         str         = cs->get( "public");
+         isPublic    = str ? (Util::strEq( str, "yes") ? true : false) : false;
++	str	    = cs->get("fileAddDate");
++	fileAddDate = str ? (Util::strEq( str, "yes") ? true : false) : false;
++        
+         localDumpName = cs->get( "localDumpFile");
+ 
+         // go on and create the things
+ 
+         // check for and create the local dump file if needed
+         if ( localDumpName != 0 ) {
++	
++	    if (fileAddDate)
++		localDumpName = Util::fileAddDate(localDumpName);
++		
+             localDumpFile = new FileSink( localDumpName);
+             if ( !localDumpFile->exists() ) {
+                 if ( !localDumpFile->create() ) {
+@@ -454,7 +468,6 @@
+                 }
+             }
+         }
+-
+         // streaming related stuff
+         audioOuts[u].socket = new TcpSocket( server, port);
+         audioOuts[u].server = new IceCast2( audioOuts[u].socket.get(),
+@@ -572,6 +585,7 @@
+         const char                * icq             = 0;
+         const char                * localDumpName   = 0;
+         FileSink                  * localDumpFile   = 0;
++	bool                        fileAddDate     = false;
+ 
+         str         = cs->get( "sampleRate");
+         sampleRate  = str ? Util::strToL( str) : dsp->getSampleRate();
+@@ -632,12 +646,20 @@
+         irc         = cs->get( "irc");
+         aim         = cs->get( "aim");
+         icq         = cs->get( "icq");
++	str	    = cs->get("fileAddDate");
++	fileAddDate = str ? (Util::strEq( str, "yes") ? true : false) : false;
++
++	
+         localDumpName = cs->get( "localDumpFile");
+ 
+         // go on and create the things
+ 
+         // check for and create the local dump file if needed
+         if ( localDumpName != 0 ) {
++	
++	    if (fileAddDate)
++		localDumpName = Util::fileAddDate(localDumpName);
++		
+             localDumpFile = new FileSink( localDumpName);
+             if ( !localDumpFile->exists() ) {
+                 if ( !localDumpFile->create() ) {
+diff -ub --exclude=Makefile darkice-0.12/src/Util.cpp darkice-0.12-mediabox/src/Util.cpp
+--- darkice-0.12/src/Util.cpp	Tue Aug 20 21:39:14 2002
++++ darkice-0.12-mediabox/src/Util.cpp	Tue Nov 19 13:48:50 2002
+@@ -260,6 +260,44 @@
+     return val;
+ }
+ 
++/*------------------------------------------------------------------------------
++ *  insert date between 2 string pointers
++ *----------------------------------------------------------------------------*/
++
++char * 
++Util :: fileAddDate ( const char * str ) throw ( Exception )
++{
++    unsigned int 	size;
++    char		* s;
++    char		* strdate;
++    char 		* last;
++    time_t		now;
++    
++    if ( !str ) {
++        throw Exception( __FILE__, __LINE__, "no str");
++    }
++    
++    
++    strdate = new char[128];
++    now = time(NULL);    
++    strftime(strdate,128,"[%m-%d-%Y-%H-%M-%S]",localtime (&now));
++    
++    last = strrchr (str,'.');
++    if (last == NULL) 
++	last = (char *) str + strlen (str);
++	
++    size = strlen (str) + strlen (strdate) + 1;
++    
++    s = new char [size];
++    
++    memcpy (s, str, strlen (str)-strlen(last));
++    memcpy (s + strlen(str) -  strlen(last), strdate, strlen (strdate));
++    memcpy (s + strlen(str) -  strlen(last) + strlen(strdate), last,strlen(last));
++    s[size-1]='\0';
++    
++    delete strdate;   
++    return s;
++}
+ 
+ /*------------------------------------------------------------------------------
+  *  Convert an unsigned char buffer holding 8 or 16 bit PCM values with
+diff -ub --exclude=Makefile darkice-0.12/src/Util.h darkice-0.12-mediabox/src/Util.h
+--- darkice-0.12/src/Util.h	Tue Aug 20 21:39:14 2002
++++ darkice-0.12-mediabox/src/Util.h	Tue Nov 19 13:55:57 2002
+@@ -203,6 +203,18 @@
+         strToD ( const char    * str )              throw ( Exception );
+ 
+         /**
++         *  Add a date to a string
++         *
++         *  @param str the string to convert (file name).
++         *  @return the new string with the date appended before 
++	 *  extension of the file name
++         *  @exception Exception
++         */
++	
++	static char *
++	fileAddDate ( const char * str)		    throw ( Exception );
++
++        /**
+          *  Convert a string into base64 encoding.
+          *  base64 is described in RFC 2045, section 6.8
+          *  The returned string must be freed with delete[].

@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<CServer>
+	<admin>panic@infoiasi.ro</admin>
+	<hostname>www.cserver.org</hostname>
+	<port>7777</port>
+	<bind-address>127.0.0.1</bind-address>
+	
+	<limits>
+	    <client-timeout>40</client-timeout>
+	    <client-limit>140</client-limit>
+	</limits>
+	
+	<security>
+	    <chroot>0</chroot>
+	    <chuid>0</chuid>
+	    <user>nobody</user>
+	    <group>nobody</group>
+	</security>
+	
+	<paths>
+	    <base-dir>/usr/local/bin</base-dir>
+	    <log-dir>/var/log/cserver</log-dir>
+	</paths>
+	
+	<logging>
+	    <access-log>access.log</access-log>
+	    <error-log>error.log</error-log>
+	</logging>
+	
+</CServer>

@@ -1,0 +1,3 @@
+module_watchdog=30
+module_name=MP3OGGSpinner-1
+module_command=/mediabox/webadmin/web-control/cgi-bin/wrappers/spinners/mp3oggplaylist.wrapper --playlist_file=sample.txt --channels=0 --bitrate=0 --description=\"'iTuner Playlist Streaming'\" --genre=\"''\" --random=1 --loop=1 --server=127.0.0.1 --port=8060 --mountpoint=playlist.mp3 --password=live2me --title=\"'Mp3 Ogg Stream'\"

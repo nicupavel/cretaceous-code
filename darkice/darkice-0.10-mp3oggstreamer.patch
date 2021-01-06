@@ -1,0 +1,336 @@
+Common subdirectories: darkice-0.10/src/.deps and darkice-0.10-mediabox/src/.deps
+Binary files darkice-0.10/src/BufferedSink.o and darkice-0.10-mediabox/src/BufferedSink.o differ
+Common subdirectories: darkice-0.10/src/CVS and darkice-0.10-mediabox/src/CVS
+Binary files darkice-0.10/src/CastSink.o and darkice-0.10-mediabox/src/CastSink.o differ
+Binary files darkice-0.10/src/Config.o and darkice-0.10-mediabox/src/Config.o differ
+Binary files darkice-0.10/src/ConfigSection.o and darkice-0.10-mediabox/src/ConfigSection.o differ
+diff -u darkice-0.10/src/Connector.cpp darkice-0.10-mediabox/src/Connector.cpp
+--- darkice-0.10/src/Connector.cpp	Sat Jul 20 19:37:06 2002
++++ darkice-0.10-mediabox/src/Connector.cpp	Sun Jul 28 18:07:20 2002
+@@ -164,7 +164,8 @@
+         sinks[0] = 0;
+         delete[] sinks;
+         sinks    = 0;
+-
++	--numSinks;
++	
+         return true;
+ 
+     } else {
+@@ -288,9 +289,6 @@
+                     } catch ( Exception     & e ) {
+                         sinks[u]->close();
+                         detach( sinks[u].get() );
+-                        /* with the call to detach, numSinks gets 1 lower,
+-                         * and the next sink comes to sinks[u] */
+-                        --u;
+ 
+                         reportEvent( 4,
+                               "Connector :: transfer, sink removed, remaining",
+@@ -299,8 +297,13 @@
+                         if ( numSinks == 0 ) {
+                             reportEvent( 4,
+                                         "Connector :: transfer, no more sinks");
+-                            break;
++                            return b;
+                         }
++			/* with the call to detach, numSinks gets 1 lower,
++                        * and the next sink comes to sinks[u] 
++			 * decrease only if numSinks > 0 else we will get
++			 * out of bounds                                  */
++                        --u;
+                     }
+                 }
+             }
+Only in darkice-0.10-mediabox/src/: Connector.cpp.debug
+Only in darkice-0.10/src/: Connector.cpp.new
+Binary files darkice-0.10/src/Connector.o and darkice-0.10-mediabox/src/Connector.o differ
+diff -u darkice-0.10/src/DarkIce.cpp darkice-0.10-mediabox/src/DarkIce.cpp
+--- darkice-0.10/src/DarkIce.cpp	Sat Jul 20 13:59:00 2002
++++ darkice-0.10-mediabox/src/DarkIce.cpp	Fri Jul 26 11:41:50 2002
+@@ -71,7 +71,6 @@
+ #endif
+ 
+ 
+-
+ #include "Util.h"
+ #include "IceCast.h"
+ #include "IceCast2.h"
+@@ -218,6 +217,7 @@
+         int                         highpass        = 0;
+         const char                * localDumpName   = 0;
+         FileSink                  * localDumpFile   = 0;
++	bool			    fileAddDate     = false;
+ 
+         str         = cs->get( "sampleRate");
+         sampleRate  = str ? Util::strToL( str) : dsp->getSampleRate();
+@@ -278,6 +278,8 @@
+         lowpass     = str ? Util::strToL( str) : 0;
+         str         = cs->get( "highpass");
+         highpass    = str ? Util::strToL( str) : 0;
++	str	    = cs->get("fileAddDate");
++	fileAddDate = str ? (Util::strEq( str, "yes") ? true : false) : false;
+ 
+         localDumpName = cs->get( "localDumpFile");
+ 
+@@ -285,6 +287,10 @@
+ 
+         // check for and create the local dump file if needed
+         if ( localDumpName != 0 ) {
++	
++	    if (fileAddDate)
++		localDumpName = Util::fileAddDate(localDumpName);
++		
+             localDumpFile = new FileSink( localDumpName);
+             if ( !localDumpFile->exists() ) {
+                 if ( !localDumpFile->create() ) {
+@@ -376,6 +382,7 @@
+         bool                        isPublic        = false;
+         const char                * localDumpName   = 0;
+         FileSink                  * localDumpFile   = 0;
++	bool			    fileAddDate     = false;
+ 
+         str         = cs->getForSure( "format", " missing in section ", stream);
+         if ( Util::strEq( str, "vorbis") ) {
+@@ -442,12 +449,18 @@
+         genre       = cs->get( "genre");
+         str         = cs->get( "public");
+         isPublic    = str ? (Util::strEq( str, "yes") ? true : false) : false;
++	str	    = cs->get("fileAddDate");
++	fileAddDate = str ? (Util::strEq( str, "yes") ? true : false) : false;
+         localDumpName = cs->get( "localDumpFile");
+ 
+         // go on and create the things
+ 
+         // check for and create the local dump file if needed
+         if ( localDumpName != 0 ) {
++	
++	    if (fileAddDate)
++		localDumpName = Util::fileAddDate(localDumpName);
++		
+             localDumpFile = new FileSink( localDumpName);
+             if ( !localDumpFile->exists() ) {
+                 if ( !localDumpFile->create() ) {
+@@ -579,6 +592,7 @@
+         const char                * icq             = 0;
+         const char                * localDumpName   = 0;
+         FileSink                  * localDumpFile   = 0;
++	bool			    fileAddDate     = false;
+ 
+         str         = cs->get( "sampleRate");
+         sampleRate  = str ? Util::strToL( str) : dsp->getSampleRate();
+@@ -637,12 +651,19 @@
+         irc         = cs->get( "irc");
+         aim         = cs->get( "aim");
+         icq         = cs->get( "icq");
+-        localDumpName = cs->get( "localDumpFile");
++	str	    = cs->get("fileAddDate");
++	fileAddDate = str ? (Util::strEq( str, "yes") ? true : false) : false;
++        
++	localDumpName = cs->get( "localDumpFile");
+ 
+         // go on and create the things
+ 
+         // check for and create the local dump file if needed
+         if ( localDumpName != 0 ) {
++	
++	    if (fileAddDate)
++		localDumpName = Util::fileAddDate(localDumpName);
++		
+             localDumpFile = new FileSink( localDumpName);
+             if ( !localDumpFile->exists() ) {
+                 if ( !localDumpFile->create() ) {
+Binary files darkice-0.10/src/DarkIce.o and darkice-0.10-mediabox/src/DarkIce.o differ
+Binary files darkice-0.10/src/Exception.o and darkice-0.10-mediabox/src/Exception.o differ
+Binary files darkice-0.10/src/FileCast.o and darkice-0.10-mediabox/src/FileCast.o differ
+Binary files darkice-0.10/src/FileSink.o and darkice-0.10-mediabox/src/FileSink.o differ
+Binary files darkice-0.10/src/IceCast.o and darkice-0.10-mediabox/src/IceCast.o differ
+Binary files darkice-0.10/src/IceCast2.o and darkice-0.10-mediabox/src/IceCast2.o differ
+diff -u darkice-0.10/src/LameLibEncoder.cpp darkice-0.10-mediabox/src/LameLibEncoder.cpp
+--- darkice-0.10/src/LameLibEncoder.cpp	Tue May 28 15:35:41 2002
++++ darkice-0.10-mediabox/src/LameLibEncoder.cpp	Sun Jul 28 10:42:12 2002
+@@ -282,7 +282,9 @@
+     unsigned int    nSamples = processed / sampleSize;
+     short int     * leftBuffer  = new short int[nSamples];
+     short int     * rightBuffer = new short int[nSamples];
+-
++    //short int 		leftBuffer[nSamples];
++    //short int		rightBuffer[nSamples];
++    
+     if ( bitsPerSample == 8 ) {
+         Util::conv8( b, processed, leftBuffer, rightBuffer, channels);
+     } else if ( bitsPerSample == 16 ) {
+@@ -303,6 +305,8 @@
+     // data chunk size estimate according to lame documentation
+     unsigned int    mp3Size = (unsigned int) (1.25 * nSamples + 7200);
+     unsigned char * mp3Buf  = new unsigned char[mp3Size];
++    //unsigned char mp3Buf[mp3Size];
++    
+     int             ret;
+ 
+     ret = lame_encode_buffer( lameGlobalFlags,
+@@ -312,16 +316,19 @@
+                               mp3Buf,
+                               mp3Size );
+ 
+-    delete[] mp3Buf;
++    
+     delete[] leftBuffer;
+     delete[] rightBuffer;
+ 
+     if ( ret < 0 ) {
+         reportEvent( 3, "lame encoding error", ret);
++	delete[] mp3Buf;
+         return 0;
+     }
+ 
+     unsigned int    written = sink->write( mp3Buf, ret);
++    delete[] mp3Buf;
++    
+     // just let go data that could not be written
+     if ( written < (unsigned int) ret ) {
+         reportEvent( 2,
+@@ -347,6 +354,7 @@
+     // data chunk size estimate according to lame documentation
+     unsigned int    mp3Size = 7200;
+     unsigned char * mp3Buf  = new unsigned char[mp3Size];
++    //unsigned char mp3Buf[mp3Size];
+     int             ret;
+ 
+     ret = lame_encode_flush( lameGlobalFlags, mp3Buf, mp3Size );
+Only in darkice-0.10-mediabox/src/: LameLibEncoder.cpp.dynamic-malloc
+Only in darkice-0.10-mediabox/src/: LameLibEncoder.cpp.static-malloc
+Binary files darkice-0.10/src/LameLibEncoder.o and darkice-0.10-mediabox/src/LameLibEncoder.o differ
+diff -u darkice-0.10/src/Makefile darkice-0.10-mediabox/src/Makefile
+--- darkice-0.10/src/Makefile	Thu Jul 25 21:22:28 2002
++++ darkice-0.10-mediabox/src/Makefile	Sun Jul 28 17:51:03 2002
+@@ -63,7 +63,9 @@
+ VERSION = 0.10
+ 
+ bin_PROGRAMS = darkice
++#CXXFLAGS = -O2 -pedantic -Wall -g
+ CXXFLAGS = -O2 -pedantic -Wall
++#CXXFLAGS = -O2 -Wall
+ INCLUDES = -I/usr/local/include 
+ LDADD = -L/usr/local/lib -lmp3lame -L/usr/local/lib -logg -lvorbis -lvorbisenc
+ 
+Binary files darkice-0.10/src/OssDspSource.o and darkice-0.10-mediabox/src/OssDspSource.o differ
+Binary files darkice-0.10/src/Reporter.o and darkice-0.10-mediabox/src/Reporter.o differ
+Binary files darkice-0.10/src/ShoutCast.o and darkice-0.10-mediabox/src/ShoutCast.o differ
+Binary files darkice-0.10/src/SolarisDspSource.o and darkice-0.10-mediabox/src/SolarisDspSource.o differ
+Binary files darkice-0.10/src/TcpSocket.o and darkice-0.10-mediabox/src/TcpSocket.o differ
+diff -u darkice-0.10/src/Util.cpp darkice-0.10-mediabox/src/Util.cpp
+--- darkice-0.10/src/Util.cpp	Sun Jul 21 11:47:06 2002
++++ darkice-0.10-mediabox/src/Util.cpp	Fri Jul 26 11:42:11 2002
+@@ -57,6 +57,11 @@
+ #error need math.h
+ #endif
+ 
++#ifdef HAVE_TIME_H
++#include <time.h>
++#else
++#error need time.h
++#endif
+ 
+ #include "Util.h"
+ 
+@@ -258,6 +263,44 @@
+     }
+ }
+ 
++/*------------------------------------------------------------------------------
++ *  insert date between 2 string pointers
++ *----------------------------------------------------------------------------*/
++
++char * 
++Util :: fileAddDate ( const char * str ) throw ( Exception )
++{
++    unsigned int 	size;
++    char		* s;
++    char		* strdate;
++    char 		* last;
++    time_t		now;
++    
++    if ( !str ) {
++        throw Exception( __FILE__, __LINE__, "no str");
++    }
++    
++    
++    strdate = new char[128];
++    now = time(NULL);    
++    strftime(strdate,128,"[%m-%d-%Y-%H-%M-%S]",localtime (&now));
++    
++    last = strrchr (str,'.');
++    if (last == NULL) 
++	last = (char *) str + strlen (str);
++	
++    size = strlen (str) + strlen (strdate) + 1;
++    
++    s = new char [size];
++    
++    memcpy (s, str, strlen (str)-strlen(last));
++    memcpy (s + strlen(str) -  strlen(last), strdate, strlen (strdate));
++    memcpy (s + strlen(str) -  strlen(last) + strlen(strdate), last,strlen(last));
++    s[size-1]='\0';
++    
++    delete strdate;   
++    return s;
++}
+ 
+ /*------------------------------------------------------------------------------
+  *  Convert a short buffer holding PCM values with channels interleaved
+diff -u darkice-0.10/src/Util.h darkice-0.10-mediabox/src/Util.h
+--- darkice-0.10/src/Util.h	Sun Jul 21 11:47:06 2002
++++ darkice-0.10-mediabox/src/Util.h	Fri Jul 26 11:39:03 2002
+@@ -197,6 +197,18 @@
+          */
+         static double
+         strToD ( const char    * str )              throw ( Exception );
++	
++	/**
++         *  Add a date to a string
++         *
++         *  @param str the string to convert (file name).
++         *  @return the new string with the date appended before 
++	 *  extension of the file name
++         *  @exception Exception
++         */
++	
++	static char *
++	fileAddDate ( const char * str)		    throw ( Exception );
+ 
+         /**
+          *  Convert an unsigned char buffer holding 8 or 16 bit PCM values
+Binary files darkice-0.10/src/Util.o and darkice-0.10-mediabox/src/Util.o differ
+Binary files darkice-0.10/src/VorbisLibEncoder.o and darkice-0.10-mediabox/src/VorbisLibEncoder.o differ
+Binary files darkice-0.10/src/aflibConverter.o and darkice-0.10-mediabox/src/aflibConverter.o differ
+Binary files darkice-0.10/src/darkice and darkice-0.10-mediabox/src/darkice differ
+diff -u darkice-0.10/src/main.cpp darkice-0.10-mediabox/src/main.cpp
+--- darkice-0.10/src/main.cpp	Tue May 28 15:35:41 2002
++++ darkice-0.10-mediabox/src/main.cpp	Fri Jul 26 14:17:18 2002
+@@ -84,10 +84,12 @@
+ {
+     int     res = -1;
+ 
+-    std::cout << "DarkIce " << VERSION
+-         << " live audio streamer, http://darkice.sourceforge.net"
++    std::cout << "mp3oggstreamer " << VERSION
++         << " mp3 ogg live audio streamer for Mediabox Systems "
+          << std::endl
+-         << "Copyright (c) 2000-2002, Tyrell Hungary, http://tyrell.hu"
++         << "Copyright (c) 2001-2002, iTuner Corporation, http://www.ituner.com"
++	 << std::endl
++	 << "Portions Copyright (c) 2001-2002, Tyrell Hungary"
+          << std::endl << std::endl;
+ 
+     try {
+@@ -146,7 +148,7 @@
+ showUsage (     std::ostream      & os )
+ {
+     os
+-    << "usage: darkice [-v n] -c config.file"
++    << "usage: mp3oggstreamer [-v n] -c config.file"
+     << std::endl
+     << std::endl
+     << "options:"
+Binary files darkice-0.10/src/main.o and darkice-0.10-mediabox/src/main.o differ

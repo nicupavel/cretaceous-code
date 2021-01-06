@@ -1,0 +1,107 @@
+
+
+<table border=0 cellspacing=0 cellpading=0 align=center width=100% height=100%>
+<tr>
+ <td align=center valign=middle>
+
+<form action=index.cgi method=post name=index >
+<table border=0 cellspacing=0 cellpading=0 align=center width=100%>
+<tr>
+    <td bgcolor=#003366 align=center><font class=bartext> Welcome to www.ecards.ro Administration Area <!!date!!></font>
+    </td>
+
+</tr>
+</table>
+
+<table border=0 cellspacing=0 cellpading=0 align=center bgcolor=white width=100%>
+<tr bgcolor=white align=center>
+  <td bgcolor=white align=center valign=middle colspan=3>
+  	<img src="../cards/included/ecards.gif" border=0>
+  </td>
+  <td align=center valign=middle colspan=2><font color=black size=2 face="Arial,Sans-Serif"><b>Administration Area</b></font></td>
+  </tr>
+<tr bgcolor=white align=center>
+  <td bgcolor=white align=center valign=middle>
+  	<b>Upload Picture:</b>
+  </td>
+
+<td bgcolor=white align=center valign=middle>
+   Category:<BR><!!list_category!!>
+  </td>
+
+<td bgcolor=white align=center valign=middle>
+  	Description:<BR><textarea name=description cols=20 rows=3></textarea>
+  </td>
+
+ <td align=center valign=middle><font color=black size=2 face="Arial,Sans-Serif"> <input type=file name=picture class=data></font></td>
+ <td align=center valign=middle><input type=submit value=upload name=action></td>
+  </tr>
+
+
+<tr bgcolor=white align=center>
+  <td bgcolor=white align=center valign=middle>
+  	<b>Create new category:</b>
+  </td>
+
+<td bgcolor=white align=center valign=middle>
+   Category Name:
+  </td>
+
+<td bgcolor=white align=center valign=middle>
+  	<input type=text name=new_category size=20>
+  </td>
+
+ <td align=center valign=middle colspan=2><input type=submit value=create name=action></font></td>
+  </tr>
+
+ <tr bgcolor=white align=center>
+  <td bgcolor=white align=center valign=middle>
+  	<b>Delete record from database:</b>
+  </td>
+
+<td bgcolor=white align=center valign=middle>
+&nbsp;
+</td>
+
+<td bgcolor=white align=center valign=middle>
+  	Press delete to view all pictures in database
+  </td>
+
+ <td align=center valign=middle colspan=2><input type=submit value=delete name=action></font></td>
+  </tr>
+</form>
+<form action="make_thumbnails.cgi" method=get>
+<tr bgcolor=white align=center>
+  <td bgcolor=white align=center valign=middle>
+  	<b>Generate thumbnails:</b>
+  </td>
+
+<td bgcolor=white align=center valign=middle>
+&nbsp;
+</td>
+
+<td bgcolor=white align=center valign=middle>
+  	Press make to generate thumbails for all images in database
+  </td>
+
+ <td align=center valign=middle colspan=2><input type=submit value=make name=action></font></td>
+  </tr>
+</form>
+
+</table>
+
+
+<table border=0 cellspacing=0 cellpading=0 align=center width=100%>
+
+<tr>
+    <td bgcolor=#003366 align=center>
+	<font class=bartext>Copyright ecards.ro. All right reserved. Suggestions to <a href="mailto:panic@n0i.net" class=navbar>panic@n0i.net</a></font>
+    </td>
+
+</tr>
+
+</table>
+
+</td>
+</tr>
+</table>

@@ -1,0 +1,14 @@
+function log ()
+{
+
+		
+	#iptables -A FORWARD -p ! icmp -j LOG
+	iptables -A FORWARD -j DROP
+
+	echo "logging"
+}
+
+function MODULE_EXPORT ()
+{
+	log
+}

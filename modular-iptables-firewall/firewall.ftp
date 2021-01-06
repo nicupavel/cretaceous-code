@@ -1,0 +1,40 @@
+function ftpd_allow ()
+{
+
+	for i in $FTPD_ALLOW; do
+	
+		iptables -A FORWARD -p tcp --sport $UNPRIVPORTS -d $i \
+			 --dport 21 -m state --state NEW -j ACCEPT
+
+		iptables -A FORWARD -p tcp --sport $UNPRIVPORTS -d $i \
+			 --dport 20 -m state --state NEW -j ACCEPT
+
+		iptables -A FORWARD -p tcp --sport $UNPRIVPORTS -d $i \
+			 --dport $UNPRIVPORTS -m state --state NEW -j ACCEPT
+	done
+		
+	echo "ftpd"
+}
+
+function ftp_allow ()
+{
+
+	for i in $ALLOW_FTP; do
+	
+		iptables -A FORWARD -p tcp --sport $UNPRIVPORTS -s $i \
+			 --dport 21 -m state --state NEW -j ACCEPT
+
+		# ip_conntrack_ftp could take care of this 
+
+		iptables -A FORWARD -p tcp --sport $UNPRIVPORTS -s $i \
+			 --dport 20 -m state --state NEW -j ACCEPT
+	done
+		
+	echo "ftp"
+}
+
+function MODULE_EXPORT ()
+{
+	ftpd_allow
+	ftp_allow
+}

@@ -1,0 +1,218 @@
+#!/usr/bin/perl
+#-----------------------------------------------------------------------------
+# Debugging and code safe-quard support
+#-----------------------------------------------------------------------------
+# !!! FOR USING IN A PRODUCTION ENVIRONMENT COMMENT THE FOLLOWING 3 LINES !!!
+# !!! AND UNCOMMENT THE NEXT 2 !!!
+#-----------------------------------------------------------------------------
+#use warnings;
+#use strict;
+#use diagnostics;
+
+no  warnings;
+no  strict;
+use lib "/mediabox/webadmin/web-control/cgi-bin/libs";
+require "utils.pm";
+
+my  $DEBUG = 1;
+my  $FORCEKILL = 0;
+#-----------------------------------------------------------------------------
+# Library includes
+#-----------------------------------------------------------------------------
+use Time::Local;
+
+#------------------------------------------------------------------------------
+# Global constants
+#------------------------------------------------------------------------------
+my $CRON_DIR			= "/mediabox/webadmin/job-control";
+my $CRON_BIN_DIR		= "$CRON_DIR/bin";
+my $CRON_MODULES_DIR		= "$CRON_DIR/modules";
+my $STARTED_MODULES_FILE	= "started.conf";
+
+my $MODULE_NAME;	# It will be set within 'main()' subrutine
+
+my $STATUS_FILE; 	# It will be set within 'main()' subrutine
+my $LOCK_FILE;	 	# It will be set within 'main()' subrutine
+my $STDOUT_FILE; 	# It will be set within 'main()' subrutine
+my $PARAMS_FILE; 	# It will be set within 'main()' subrutine
+my $MAX_MESSAGES_COUNT = 5;		# Maximum number of messages on STATUS_FILE
+my $MESSAGES_COUNT = $MAX_MESSAGES_COUNT;
+
+
+my %params = ();        # this will hold the module stuff
+
+#------------------------------------------------------------------------------
+# Global variables
+#------------------------------------------------------------------------------
+my $ExitVal = 0;
+
+#------------------------------------------------------------------------------
+# Utility functions
+#------------------------------------------------------------------------------
+sub StatusFileMessage($)
+{
+    my $Message = shift;
+    
+    if ( $MESSAGES_COUNT != 0 ) {
+	open(STATUS, ">> $STATUS_FILE");
+    }
+    else {
+	open(STATUS, "> $STATUS_FILE");
+	$MESSAGES_COUNT = $MAX_MESSAGES_COUNT;
+    }
+
+    my $DateStamp = scalar(localtime(time));
+    $DateStamp =~ s/\s/-/g;
+
+    print STATUS "$DateStamp: $Message";
+    $MESSAGES_COUNT--;
+    close(STATUS);
+}
+
+#-----------------------------------------------------------------------------
+# 'main()' subroutine
+#-----------------------------------------------------------------------------
+
+#-----------------------------------------------------------------------------
+# Get the 'MODULE_NAME'
+#-----------------------------------------------------------------------------
+$MODULE_NAME = $ARGV[0];
+
+if (!$MODULE_NAME) {
+    print "stopmodule: missing <module_name> argument.\n";
+    exit(1);
+}
+
+
+%params = ReadParamsFile($MODULE_NAME);
+
+#-----------------------------------------------------------------------------
+# Set the special file paths for module tracking
+#-----------------------------------------------------------------------------
+$STATUS_FILE = "$CRON_MODULES_DIR/$MODULE_NAME.status";
+$LOCK_FILE   = "$CRON_MODULES_DIR/$MODULE_NAME.lock";
+$STDOUT_FILE = "$CRON_MODULES_DIR/$MODULE_NAME.stdout";
+$PARAMS_FILE = "$CRON_MODULES_DIR/$MODULE_NAME.params";
+
+#-----------------------------------------------------------------------------
+# Free the devices that module has occupied.
+#-----------------------------------------------------------------------------
+
+for (my $i=0; $params{devices}[$i];$i++) {
+    DeclareDeviceAsFree($params{devices_path}[$i], $params{devices}[$i]);
+}
+#------------------------------------------------------------------------------
+# First kill the 'startmodule' shell process.
+# Its PID is stored in '$LOCK_FILE' file
+#------------------------------------------------------------------------------
+if (!open(LOCK, "< $LOCK_FILE")) {
+    printf "stopmodule: '$LOCK_FILE' file for '$MODULE_NAME' module " .
+	"doesn't exist.\n";
+    
+    $ExitVal = 2;
+    goto EXIT_POINT;
+}
+
+my $START_MODULE_PID = <LOCK>;
+chomp($START_MODULE_PID);
+
+close(LOCK);
+
+if (!$START_MODULE_PID) {
+    print "stopmodule: '$LOCK_FILE' file for '$MODULE_NAME' module is empty.\n";
+    
+    $ExitVal = 3;
+    goto EXIT_POINT;
+}
+
+system("/usr/bin/sudo /bin/kill -9 $START_MODULE_PID 2> /dev/null");
+
+#------------------------------------------------------------------------------
+# Next kill all process created by '$MODULE_NAME' module
+#------------------------------------------------------------------------------
+my $pid;
+my $module;
+my $cpu;
+my $ThereAreChildren;
+do {
+    $ThereAreChildren = 0;
+    
+    open(CHILDREN,"$CRON_BIN_DIR/pspidwatcher |");
+	
+    while (<CHILDREN>) {
+    	chomp();
+	/PID=([0-9]*)/g;
+	$pid = $1;
+	/CPU=([0-9.]*)/g;
+	$cpu=$1;
+	/MediaBoxModuleName=($MODULE_NAME).*$/g;
+	$module = $1;
+	if ($module eq $MODULE_NAME) {
+
+	    $ThereAreChildren = 1;
+	
+	    print "Closing process $pid belonging to '$module' module freeing $cpu% cpu\n" if $DEBUG;
+	    
+	    system("/usr/bin/sudo /bin/kill -2 $pid 2> /dev/null");
+	    system("/usr/bin/sudo /bin/kill    $pid 2> /dev/null");
+	    sleep(1);
+	    if ($FORCEKILL) {
+		# Give some time for module to finish
+		sleep(1);
+		system("/usr/bin/sudo /bin/kill -9 $pid 2> /dev/null");
+	    }
+	}
+    }
+	
+    close(CHILDREN);
+}
+while ($ThereAreChildren);
+
+#------------------------------------------------------------------------------
+# Update the status information file for '$MODULE_NAME' module
+#------------------------------------------------------------------------------
+my $DateStamp = scalar(localtime(time));
+$DateStamp =~ s/\s/-/g;
+
+StatusFileMessage("stopped.\n");
+
+print "Module '$MODULE_NAME' stopped.\n" if $DEBUG;
+
+#-----------------------------------------------------------------------------
+
+EXIT_POINT:
+
+#-----------------------------------------------------------------------------
+# Update the '$CRON_MODULES_DIR/STARTED_MODULES_FILE'
+#-----------------------------------------------------------------------------
+my $StartedModulesFileTemp = $STARTED_MODULES_FILE . "." . time();
+
+if (open(STARTED_MODULES_TEMP, "> /tmp/$StartedModulesFileTemp")) {
+    if (open(STARTED_MODULES, "< $CRON_MODULES_DIR/$STARTED_MODULES_FILE")) {
+	while (<STARTED_MODULES>) {
+	    chomp();
+	
+	    if ($_ ne $MODULE_NAME) {
+		print STARTED_MODULES_TEMP "$_\n";
+	    }
+	}
+	close(STARTED_MODULES);
+    }
+    close(STARTED_MODULES_TEMP);
+    
+    system("mv -f \"/tmp/$StartedModulesFileTemp\" " .
+	"\"$CRON_MODULES_DIR/$STARTED_MODULES_FILE\"");
+}
+
+#-----------------------------------------------------------------------------
+# Delete 'LOCK_FILE', 'STDOUT_FILE' and 'PARAMS_FILE'
+#-----------------------------------------------------------------------------
+unlink 
+    "$LOCK_FILE",
+    "$STDOUT_FILE",
+    "$PARAMS_FILE"
+;
+ 
+print "unlink: '$LOCK_FILE', '$STDOUT_FILE', '$PARAMS_FILE'\n" if $DEBUG;
+#-----------------------------------------------------------------------------
+exit($ExitVal);

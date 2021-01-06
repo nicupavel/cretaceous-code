@@ -1,0 +1,95 @@
+<!DOCTYPE html> 
+<html>
+<head>
+<title>Gauge Test</title>
+<script>
+var c;
+var loop;
+
+var anglemin = 0;
+var anglemax = 360;
+var anglecur = anglemin;
+var angleinc = 5;
+var skinDir="Skin1/"
+var imgGauge = new Image();
+var imgNeedle = new Image();
+var imgCircle = new Image();
+
+GAUGE_X = 100;
+GAUGE_Y = 100;
+
+function setSkin(n)
+{
+	skinDir = "Skin"+n+"/";
+	imgGauge.src = skinDir + "gauge.png";
+	imgNeedle.src = skinDir + "needle.png";
+	imgCircle.src = skinDir + "circle.png";
+	c.clearRect(0,0, 600, 600);
+}
+
+function setAngle()
+{
+
+	anglemin = document.getElementById('anglemin').value;
+	anglemax = document.getElementById('anglemax').value;
+	angleinc = document.getElementById('angleinc').value;
+	anglecur = anglemin;
+	//alert(anglemin + " " + anglemax + " " + angleinc);
+}
+
+function gaugeDraw()
+{	
+	var x = GAUGE_X + imgGauge.width / 2;
+	var y = GAUGE_Y + imgGauge.height / 2;
+	
+	if (anglecur > anglemax)
+	{
+		anglecur = anglemin;
+	}
+	anglecur += angleinc;
+	//c.globalCompositeOperation = 'destination-over';  
+	//c.clearRect(0,0, 600, 600);
+	c.drawImage(imgGauge, GAUGE_X, GAUGE_Y);
+	
+	c.save();
+	//c.translate(x - imgNeedle.height/2 , y);
+	c.translate( (600+GAUGE_X- imgGauge.width + imgNeedle.width/2)*Math.sqrt(2)/2*(0.7 - Math.cos((anglecur+45) * Math.PI / 180)),
+		     (600+GAUGE_X - imgGauge.width + imgNeedle.width/2)*Math.sqrt(2)/2*(0.7 - Math.sin((anglecur+45) * Math.PI / 180)));
+	
+	c.rotate(anglecur * (Math.PI/180));
+	
+	//c.drawImage(imgNeedle, 0, 0);
+	c.drawImage(imgNeedle, (600 + GAUGE_X - imgGauge.width + imgNeedle.width/2)/2, 
+		    (600 + GAUGE_Y - imgGauge.height + imgNeedle.width/2)/2 -imgNeedle.height/2);
+	c.restore();
+	c.drawImage(imgCircle, x - imgCircle.width/2, y - imgCircle.height/2);
+}
+
+function gaugeInit()
+{
+	var cgauge = document.getElementById('gauge');
+	c = cgauge.getContext('2d');
+	setSkin(1);
+	//setAngle();
+	loop = setInterval(gaugeDraw, 100);
+
+}
+
+</script>
+</head>
+<body onload="gaugeInit();" background="Skin1/bg.png">
+<canvas id="gauge" width="600" height="600">HTML5 Not supported by browser </canvas>
+<div>
+<input type="button" onclick='setSkin(1);' value='skin 1'>
+<input type="button" onclick='setSkin(2);' value='skin 2'>
+<input type="button" onclick='setSkin(3);' value='skin 3'>
+<!--
+<br/>
+<input type=text id='anglemin' value='0' size=3>
+<input type=text id='anglemax' value='360' size=3>
+<input type=text id='angleinc' value='5' size=3>
+<input type=button onclick='setAngle();' value='Set Angle'>
+-->
+</div>
+</body>
+</html>

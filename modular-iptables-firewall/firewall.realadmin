@@ -1,0 +1,19 @@
+function realadmin_allow ()
+{
+
+	for i in $ALLOW_REALADMIN; do
+	
+		iptables -A FORWARD -p tcp --sport $UNPRIVPORTS -d $i \
+			 --dport 8888 -m state --state NEW -j ACCEPT
+
+		iptables -A FORWARD -p tcp --sport $UNPRIVPORTS -d $i \
+			--dport 9090 -m state --state NEW -j ACCEPT
+	done
+		
+	echo "real admin"
+}
+
+function MODULE_EXPORT ()
+{
+	realadmin_allow
+}

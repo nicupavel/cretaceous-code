@@ -1,0 +1,24 @@
+From e3d000f4d2f50886e6bfc4560b44a501b6af0c88 Mon Sep 17 00:00:00 2001
+From: Nicu Pavel <npavel@mini-box.com>
+Date: Thu, 11 Feb 2010 11:10:53 +0200
+Subject: [PATCH 1/4] Init second bank of memory @ 0x20000000
+
+---
+ at91bootstrap/main.c |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/at91bootstrap/main.c b/at91bootstrap/main.c
+index 4cbf688..36cc757 100644
+--- a/at91bootstrap/main.c
++++ b/at91bootstrap/main.c
+@@ -348,6 +348,7 @@ int main()
+     #if defined(DESTINATION_ddram)
+     TRACE_INFO("Init DDRAM\n\r");
+     BOARD_ConfigureDdram(0, BOARD_DDRAM_BUSWIDTH);
++    BOARD_ConfigureDdramCp1(16); //Init the second bank of memory@0x20000000
+     #endif
+ 
+     // BCRAM
+-- 
+1.6.3.3
+
